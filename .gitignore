@@ -1,0 +1,4 @@
+node_modules/
+scores.json
+npm-debug.log
+.env

@@ -1,0 +1,19 @@
+{
+  "name": "score_server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["bakabakaband", "roguelike", "score-server", "leaderboard"],
+  "author": "",
+  "license": "ISC",
+  "description": "Score server for Bakabakaband - accepts JSON game dumps and displays leaderboard",
+  "dependencies": {
+    "body-parser": "^2.2.1",
+    "cors": "^2.8.5",
+    "express": "^5.2.1"
+  }
+}
