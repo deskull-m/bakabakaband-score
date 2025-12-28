@@ -220,12 +220,204 @@ app.get('/leaderboard', async (req, res) => {
                         }
                         tr:hover {
                             background: #f5f5f5;
+                            cursor: pointer;
                         }
                         .rank {
                             font-weight: bold;
                             font-size: 1.2em;
                             text-align: center;
                             width: 60px;
+                        }
+                        /* Modal styles */
+                        .modal {
+                            display: none;
+                            position: fixed;
+                            z-index: 1000;
+                            left: 0;
+                            top: 0;
+                            width: 100%;
+                            height: 100%;
+                            background-color: rgba(0,0,0,0.7);
+                            animation: fadeIn 0.3s;
+                        }
+                        @keyframes fadeIn {
+                            from { opacity: 0; }
+                            to { opacity: 1; }
+                        }
+                        .modal-content {
+                            background-color: #fefefe;
+                            margin: 5% auto;
+                            padding: 0;
+                            border: 1px solid #888;
+                            width: 90%;
+                            max-width: 900px;
+                            max-height: 85vh;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                            display: flex;
+                            flex-direction: column;
+                        }
+                        .modal-header {
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            padding: 20px;
+                            border-radius: 8px 8px 0 0;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+                        .modal-header h2 {
+                            margin: 0;
+                            font-size: 1.5em;
+                        }
+                        .close {
+                            color: white;
+                            font-size: 32px;
+                            font-weight: bold;
+                            cursor: pointer;
+                            line-height: 1;
+                            transition: transform 0.2s;
+                        }
+                        .close:hover,
+                        .close:focus {
+                            transform: rotate(90deg);
+                        }
+                        .modal-body {
+                            padding: 20px;
+                            overflow-y: auto;
+                            flex: 1;
+                        }
+                        .json-container {
+                            background: #282c34;
+                            color: #abb2bf;
+                            padding: 20px;
+                            border-radius: 4px;
+                            overflow-x: auto;
+                            font-family: 'Courier New', monospace;
+                            font-size: 13px;
+                            line-height: 1.5;
+                        }
+                        .json-key {
+                            color: #e06c75;
+                        }
+                        .json-string {
+                            color: #98c379;
+                        }
+                        .json-number {
+                            color: #d19a66;
+                        }
+                        .json-boolean {
+                            color: #56b6c2;
+                        }
+                        .json-null {
+                            color: #c678dd;
+                        }
+                        .copy-btn {
+                            background: #4CAF50;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 14px;
+                            margin-top: 10px;
+                            transition: background 0.3s;
+                        }
+                        .copy-btn:hover {
+                            background: #45a049;
+                        }
+                        .copy-btn:active {
+                            background: #3d8b40;
+                        }
+                        .status-container {
+                            margin-bottom: 20px;
+                        }
+                        .status-section {
+                            background: #f9f9f9;
+                            border-radius: 6px;
+                            padding: 15px;
+                            margin-bottom: 15px;
+                        }
+                        .status-section h3 {
+                            margin: 0 0 15px 0;
+                            color: #667eea;
+                            border-bottom: 2px solid #667eea;
+                            padding-bottom: 8px;
+                            font-size: 1.1em;
+                        }
+                        .status-grid {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                            gap: 12px;
+                        }
+                        .status-item {
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 8px 12px;
+                            background: white;
+                            border-radius: 4px;
+                            border-left: 3px solid #667eea;
+                        }
+                        .status-label {
+                            font-weight: 600;
+                            color: #555;
+                        }
+                        .status-value {
+                            color: #333;
+                            font-weight: 500;
+                        }
+                        .stats-table {
+                            width: 100%;
+                            background: white;
+                            border-radius: 4px;
+                            overflow: hidden;
+                        }
+                        .stats-table th {
+                            background: #667eea;
+                            color: white;
+                            padding: 10px;
+                            text-align: center;
+                            font-size: 0.9em;
+                        }
+                        .stats-table td {
+                            padding: 10px;
+                            text-align: center;
+                            border-bottom: 1px solid #eee;
+                        }
+                        .stats-table tr:last-child td {
+                            border-bottom: none;
+                        }
+                        .tab-container {
+                            margin-bottom: 15px;
+                        }
+                        .tab-buttons {
+                            display: flex;
+                            gap: 5px;
+                            margin-bottom: 15px;
+                        }
+                        .tab-btn {
+                            flex: 1;
+                            padding: 10px 20px;
+                            background: #e0e0e0;
+                            border: none;
+                            cursor: pointer;
+                            font-size: 14px;
+                            font-weight: 600;
+                            transition: all 0.3s;
+                            border-radius: 4px 4px 0 0;
+                        }
+                        .tab-btn.active {
+                            background: #667eea;
+                            color: white;
+                        }
+                        .tab-btn:hover:not(.active) {
+                            background: #d0d0d0;
+                        }
+                        .tab-content {
+                            display: none;
+                        }
+                        .tab-content.active {
+                            display: block;
                         }
                         .rank-1 { color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
                         .rank-2 { color: #C0C0C0; text-shadow: 0 0 10px rgba(192,192,192,0.5); }
@@ -311,7 +503,7 @@ app.get('/leaderboard', async (req, res) => {
                                         const date = new Date(score.timestamp);
                                         const winnerBadge = score.isWinner ? '<span class="winner">WINNER</span>' : '';
                                         return `
-                                            <tr>
+                                            <tr onclick='showModal(${JSON.stringify(score).replace(/'/g, "&#39;")})'>
                                                 <td class="rank ${rankClass}">${index + 1}</td>
                                                 <td><strong>${escapeHtml(score.characterName)}</strong> ${winnerBadge}</td>
                                                 <td>${escapeHtml(score.race)}</td>
@@ -330,6 +522,251 @@ app.get('/leaderboard', async (req, res) => {
 
                         <button class="refresh-btn" onclick="location.reload()">🔄 Refresh Now</button>
                     </div>
+
+                    <!-- Modal -->
+                    <div id="scoreModal" class="modal" onclick="closeModalOnBackdrop(event)">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h2>📊 Complete Score Data</h2>
+                                <span class="close" onclick="closeModal()">&times;</span>
+                            </div>
+                            <div class="modal-body">
+                                <div class="tab-container">
+                                    <div class="tab-buttons">
+                                        <button class="tab-btn active" onclick="switchTab('status')">📊 ステータス</button>
+                                        <button class="tab-btn" onclick="switchTab('json')">📄 JSON</button>
+                                    </div>
+                                    
+                                    <div id="statusTab" class="tab-content active">
+                                        <div id="statusDisplay"></div>
+                                    </div>
+                                    
+                                    <div id="jsonTab" class="tab-content">
+                                        <button class="copy-btn" onclick="copyJSON()">📋 Copy JSON to Clipboard</button>
+                                        <div class="json-container">
+                                            <pre id="jsonDisplay"></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        let currentScoreData = null;
+
+                        function switchTab(tabName) {
+                            // Update tab buttons
+                            document.querySelectorAll('.tab-btn').forEach(btn => {
+                                btn.classList.remove('active');
+                            });
+                            event.target.classList.add('active');
+                            
+                            // Update tab content
+                            document.querySelectorAll('.tab-content').forEach(content => {
+                                content.classList.remove('active');
+                            });
+                            document.getElementById(tabName + 'Tab').classList.add('active');
+                        }
+
+                        function showModal(scoreData) {
+                            currentScoreData = scoreData;
+                            const modal = document.getElementById('scoreModal');
+                            const jsonDisplay = document.getElementById('jsonDisplay');
+                            const statusDisplay = document.getElementById('statusDisplay');
+                            
+                            // Format JSON with syntax highlighting
+                            jsonDisplay.innerHTML = syntaxHighlight(JSON.stringify(scoreData, null, 2));
+                            
+                            // Format status display
+                            statusDisplay.innerHTML = formatStatusDisplay(scoreData);
+                            
+                            // Reset to status tab
+                            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                            document.querySelector('.tab-btn').classList.add('active');
+                            document.getElementById('statusTab').classList.add('active');
+                            
+                            modal.style.display = 'block';
+                            document.body.style.overflow = 'hidden';
+                        }
+
+                        function formatStatusDisplay(data) {
+                            const dump = data.dump || {};
+                            const basic = dump.basic || {};
+                            const status = dump.status || {};
+                            const stats = dump.stats || [];
+                            const death = dump.death || {};
+                            
+                            let html = '<div class="status-container">';
+                            
+                            // Basic Information Section
+                            html += '<div class="status-section">';
+                            html += '<h3>🎮 基本情報</h3>';
+                            html += '<div class="status-grid">';
+                            html += formatStatusItem('名前', basic.name || data.characterName || 'Unknown');
+                            html += formatStatusItem('性別', basic.sex || '-');
+                            html += formatStatusItem('種族', basic.race || data.race || 'Unknown');
+                            html += formatStatusItem('職業', basic.class || data.class || 'Unknown');
+                            html += formatStatusItem('年齢', basic.age ? basic.age + '才' : '-');
+                            html += formatStatusItem('身長', basic.height ? basic.height + 'cm' : '-');
+                            html += formatStatusItem('体重', basic.weight ? basic.weight + 'kg' : '-');
+                            html += formatStatusItem('社会的地位', basic.prestige || '-');
+                            html += formatStatusItem('性格', basic.personality || '-');
+                            html += '</div>';
+                            html += '</div>';
+                            
+                            // Stats Section
+                            if (stats.length > 0) {
+                                html += '<div class="status-section">';
+                                html += '<h3>💪 能力値</h3>';
+                                html += '<table class="stats-table">';
+                                html += '<thead><tr>';
+                                html += '<th>能力</th><th>現在値</th><th>最大値</th><th>使用値</th><th>最高値</th>';
+                                html += '</tr></thead><tbody>';
+                                
+                                stats.forEach(stat => {
+                                    html += '<tr>';
+                                    html += \`<td><strong>\${stat.name}</strong></td>\`;
+                                    html += \`<td>\${stat.current || '-'}</td>\`;
+                                    html += \`<td>\${stat.max || '-'}</td>\`;
+                                    html += \`<td>\${stat.use || '-'}</td>\`;
+                                    html += \`<td>\${stat.top || '-'}</td>\`;
+                                    html += '</tr>';
+                                });
+                                
+                                html += '</tbody></table>';
+                                html += '</div>';
+                            }
+                            
+                            // Combat & Status Section
+                            html += '<div class="status-section">';
+                            html += '<h3>⚔️ 戦闘・ステータス</h3>';
+                            html += '<div class="status-grid">';
+                            html += formatStatusItem('レベル', basic.level || data.level || '1');
+                            html += formatStatusItem('経験値', (basic.experience || data.experience || 0).toLocaleString());
+                            html += formatStatusItem('最大経験値', (basic.max_experience || 0).toLocaleString());
+                            html += formatStatusItem('HP', \`\${status.current_hitpoints || 0} / \${status.max_hitpoints || data.maxHp || 0}\`);
+                            html += formatStatusItem('MP', \`\${status.current_mana || 0} / \${status.max_mana || 0}\`);
+                            html += formatStatusItem('AC', status.armor_class || '-');
+                            html += formatStatusItem('所持金', (status.gold || data.gold || 0).toLocaleString() + ' Au');
+                            html += formatStatusItem('ダンジョンレベル', status.dungeon_level || data.dungeonLevel || '-');
+                            html += '</div>';
+                            html += '</div>';
+                            
+                            // Combat Details
+                            if (dump.combat) {
+                                const combat = dump.combat;
+                                html += '<div class="status-section">';
+                                html += '<h3>🗡️ 戦闘詳細</h3>';
+                                html += '<div class="status-grid">';
+                                html += formatStatusItem('打撃命中', combat.melee_hit || '-');
+                                html += formatStatusItem('射撃命中', combat.ranged_hit || '-');
+                                html += formatStatusItem('魔法防御', combat.magic_defense || '-');
+                                html += formatStatusItem('隠密行動', combat.stealth || '-');
+                                html += formatStatusItem('知覚', combat.perception || '-');
+                                html += formatStatusItem('探索', combat.searching || '-');
+                                html += formatStatusItem('解除', combat.disarming || '-');
+                                html += formatStatusItem('魔法道具', combat.magic_device || '-');
+                                html += '</div>';
+                                html += '</div>';
+                            }
+                            
+                            // Death Information
+                            html += '<div class="status-section">';
+                            html += '<h3>💀 死因・結果</h3>';
+                            html += '<div class="status-grid">';
+                            html += formatStatusItem('状態', death.is_winner || data.isWinner ? '🏆 勝利' : '💀 死亡');
+                            html += formatStatusItem('死因', death.cause || data.deathCause || 'Unknown');
+                            if (death.killer) {
+                                html += formatStatusItem('殺害者', death.killer);
+                            }
+                            if (death.location) {
+                                html += formatStatusItem('死亡場所', death.location);
+                            }
+                            html += '</div>';
+                            html += '</div>';
+                            
+                            // Timestamp
+                            html += '<div class="status-section">';
+                            html += '<h3>📅 記録情報</h3>';
+                            html += '<div class="status-grid">';
+                            html += formatStatusItem('記録ID', data.id);
+                            const date = new Date(data.timestamp);
+                            html += formatStatusItem('記録日時', date.toLocaleString('ja-JP'));
+                            html += formatStatusItem('ランク', data.rank || '-');
+                            html += '</div>';
+                            html += '</div>';
+                            
+                            html += '</div>';
+                            return html;
+                        }
+                        
+                        function formatStatusItem(label, value) {
+                            return \`
+                                <div class="status-item">
+                                    <span class="status-label">\${label}:</span>
+                                    <span class="status-value">\${value}</span>
+                                </div>
+                            \`;
+                        }
+
+                        function closeModal() {
+                            const modal = document.getElementById('scoreModal');
+                            modal.style.display = 'none';
+                            document.body.style.overflow = 'auto';
+                        }
+
+                        function closeModalOnBackdrop(event) {
+                            if (event.target.id === 'scoreModal') {
+                                closeModal();
+                            }
+                        }
+
+                        function copyJSON() {
+                            if (!currentScoreData) return;
+                            
+                            const jsonText = JSON.stringify(currentScoreData, null, 2);
+                            navigator.clipboard.writeText(jsonText).then(() => {
+                                const btn = event.target;
+                                const originalText = btn.textContent;
+                                btn.textContent = '✅ Copied!';
+                                btn.style.background = '#45a049';
+                                setTimeout(() => {
+                                    btn.textContent = originalText;
+                                    btn.style.background = '#4CAF50';
+                                }, 2000);
+                            }).catch(err => {
+                                alert('Failed to copy: ' + err);
+                            });
+                        }
+
+                        function syntaxHighlight(json) {
+                            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                                let cls = 'json-number';
+                                if (/^"/.test(match)) {
+                                    if (/:$/.test(match)) {
+                                        cls = 'json-key';
+                                    } else {
+                                        cls = 'json-string';
+                                    }
+                                } else if (/true|false/.test(match)) {
+                                    cls = 'json-boolean';
+                                } else if (/null/.test(match)) {
+                                    cls = 'json-null';
+                                }
+                                return '<span class="' + cls + '">' + match + '</span>';
+                            });
+                        }
+
+                        // Close modal on ESC key
+                        document.addEventListener('keydown', function(event) {
+                            if (event.key === 'Escape') {
+                                closeModal();
+                            }
+                        });
+                    </script>
                 </body>
             </html>
         `;
