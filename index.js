@@ -119,18 +119,20 @@ app.post('/submit', async (req, res) => {
             timestamp: new Date().toISOString(),
             dump: dump,
             // Extract key fields - try nested structure first, then flat structure
-            characterName: basic.name || dump.character_name || dump.name || 'Unknown',
+            characterName:
+        basic.name || dump.character_name || dump.name || 'Unknown',
             level: basic.level || dump.level || dump.max_plv || 0,
             experience: basic.experience || dump.exp || 0,
             race: basic.race || dump.race || dump.prace || 'Unknown',
             class: basic.class || dump.class || dump.pclass || 'Unknown',
-            deathCause: death.cause || dump.died_from || dump.last_message || 'Unknown',
+            deathCause:
+        death.cause || dump.died_from || dump.last_message || 'Unknown',
             score: basic.experience || dump.score || dump.exp || 0,
             // Additional useful fields
             maxHp: status.max_hitpoints || dump.maxhp || 0,
             gold: status.gold || dump.au || 0,
             dungeonLevel: status.dungeon_level || dump.depth || 0,
-            isWinner: death.is_winner || false
+            isWinner: death.is_winner || false,
         };
 
         // Load existing scores
@@ -149,11 +151,13 @@ app.post('/submit', async (req, res) => {
             success: true,
             message: 'Score submitted successfully',
             id: scoreEntry.id,
-            rank: scores.findIndex(s => s.id === scoreEntry.id) + 1
+            rank: scores.findIndex((s) => s.id === scoreEntry.id) + 1,
         });
     } catch (error) {
         console.error('Error submitting score:', error);
-        res.status(500).json({ error: 'Failed to submit score', details: error.message });
+        res
+            .status(500)
+            .json({ error: 'Failed to submit score', details: error.message });
     }
 });
 
@@ -505,9 +509,10 @@ app.get('/leaderboard', async (req, res) => {
                         <h1>🏆 Bakabakaband Leaderboard</h1>
                         <div class="subtitle">Total Scores: ${scores.length} | Auto-refreshes every 30 seconds</div>
 
-                        ${scores.length === 0 ?
-                            '<div class="no-scores">No scores yet. Be the first to submit!</div>' :
-                            `<table>
+                        ${
+    scores.length === 0
+        ? '<div class="no-scores">No scores yet. Be the first to submit!</div>'
+        : `<table>
                                 <thead>
                                     <tr>
                                         <th>Rank</th>
@@ -522,12 +527,22 @@ app.get('/leaderboard', async (req, res) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${scores.map((score, index) => {
-                                        const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
-                                        const date = new Date(score.timestamp);
-                                        const winnerBadge = score.isWinner ? '<span class="winner">WINNER</span>' : '';
-                                        return `
-                                            <tr onclick='showModal(${JSON.stringify(score).replace(/'/g, "&#39;")})'>
+                                    ${scores
+        .map((score, index) => {
+            const rankClass =
+                                          index === 0
+                                              ? 'rank-1'
+                                              : index === 1
+                                                  ? 'rank-2'
+                                                  : index === 2
+                                                      ? 'rank-3'
+                                                      : '';
+            const date = new Date(score.timestamp);
+            const winnerBadge = score.isWinner
+                ? '<span class="winner">WINNER</span>'
+                : '';
+            return `
+                                            <tr onclick='showModal(${JSON.stringify(score).replace(/'/g, '&#39;')})'>
                                                 <td class="rank ${rankClass}">${index + 1}</td>
                                                 <td><strong>${escapeHtml(score.characterName)}</strong> ${winnerBadge}</td>
                                                 <td>${escapeHtml(score.race)}</td>
@@ -539,10 +554,11 @@ app.get('/leaderboard', async (req, res) => {
                                                 <td class="timestamp">${date.toLocaleDateString()} ${date.toLocaleTimeString()}</td>
                                             </tr>
                                         `;
-                                    }).join('')}
+        })
+        .join('')}
                                 </tbody>
                             </table>`
-                        }
+}
 
                         <button class="refresh-btn" onclick="location.reload()">🔄 Refresh Now</button>
                     </div>
@@ -749,7 +765,7 @@ app.get('/leaderboard', async (req, res) => {
 
                         function copyJSON() {
                             if (!currentScoreData) return;
-                            
+
                             const jsonText = JSON.stringify(currentScoreData, null, 2);
                             navigator.clipboard.writeText(jsonText).then(() => {
                                 const btn = event.target;
@@ -767,7 +783,7 @@ app.get('/leaderboard', async (req, res) => {
 
                         function syntaxHighlight(json) {
                             json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(s*:)?|\b(true|false|null)\b|-?d+(?:.d*)?(?:[eE][+-]?d+)?)/g, function (match) {
                                 let cls = 'json-number';
                                 if (/^"/.test(match)) {
                                     if (/:$/.test(match)) {
@@ -820,7 +836,7 @@ app.delete('/scores/:id', async (req, res) => {
         let scores = await loadScores();
 
         const initialLength = scores.length;
-        scores = scores.filter(s => s.id !== id);
+        scores = scores.filter((s) => s.id !== id);
 
         if (scores.length === initialLength) {
             return res.status(404).json({ error: 'Score not found' });
@@ -838,7 +854,9 @@ app.delete('/scores/:id', async (req, res) => {
 async function startServer() {
     await initScoresFile();
     app.listen(PORT, () => {
-        console.log(`🎮 Bakabakaband Score Server running on http://localhost:${PORT}`);
+        console.log(
+            `🎮 Bakabakaband Score Server running on http://localhost:${PORT}`,
+        );
         console.log(`📊 View leaderboard at http://localhost:${PORT}/leaderboard`);
         console.log(`📤 Submit scores to http://localhost:${PORT}/submit`);
     });
