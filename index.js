@@ -48,14 +48,17 @@ app.get('/', (req, res) => {
             <head>
                 <title>Bakabakaband Score Server</title>
                 <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
-                    .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    h1 { color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
-                    .info { background: #e8f5e9; padding: 15px; border-radius: 4px; margin: 20px 0; }
-                    .endpoint { margin: 10px 0; padding: 10px; background: #f5f5f5; border-left: 4px solid #2196F3; }
-                    code { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; }
-                    a { color: #2196F3; text-decoration: none; }
-                    a:hover { text-decoration: underline; }
+                    body { font-family: Arial, sans-serif; margin: 20px; background: #0a0a0a; color: #e0e0e0; }
+                    .container { max-width: 1200px; margin: 0 auto; background: #1a1a1a; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); border: 1px solid #333; }
+                    h1 { color: #ffcc00; border-bottom: 2px solid #ff3333; padding-bottom: 10px; text-shadow: 0 0 10px rgba(255, 204, 0, 0.5); }
+                    .info { background: #2a2a2a; padding: 15px; border-radius: 4px; margin: 20px 0; border: 1px solid #ffcc00; }
+                    .endpoint { margin: 10px 0; padding: 10px; background: #252525; border-left: 4px solid #ff3333; }
+                    .endpoint h3 { color: #ffcc00; }
+                    code { background: #333; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; color: #ffcc00; }
+                    a { color: #ffcc00; text-decoration: none; }
+                    a:hover { color: #ff3333; text-decoration: underline; }
+                    p { color: #ccc; }
+                    strong { color: #ffcc00; }
                 </style>
             </head>
             <body>
@@ -178,26 +181,28 @@ app.get('/leaderboard', async (req, res) => {
                         body {
                             font-family: Arial, sans-serif;
                             margin: 20px;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            background: #0a0a0a;
                             min-height: 100vh;
                         }
                         .container {
                             max-width: 1200px;
                             margin: 0 auto;
-                            background: white;
+                            background: #1a1a1a;
                             padding: 30px;
                             border-radius: 12px;
-                            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                            box-shadow: 0 10px 30px rgba(255, 51, 51, 0.3);
+                            border: 2px solid #333;
                         }
                         h1 {
-                            color: #333;
+                            color: #ffcc00;
                             text-align: center;
                             margin-bottom: 10px;
                             font-size: 2.5em;
+                            text-shadow: 0 0 20px rgba(255, 204, 0, 0.6);
                         }
                         .subtitle {
                             text-align: center;
-                            color: #666;
+                            color: #999;
                             margin-bottom: 30px;
                         }
                         table {
@@ -206,20 +211,22 @@ app.get('/leaderboard', async (req, res) => {
                             margin-top: 20px;
                         }
                         th {
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
+                            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+                            color: #ffcc00;
                             padding: 15px;
                             text-align: left;
                             font-weight: bold;
                             position: sticky;
                             top: 0;
+                            border-bottom: 2px solid #ff3333;
                         }
                         td {
                             padding: 12px 15px;
-                            border-bottom: 1px solid #ddd;
+                            border-bottom: 1px solid #333;
+                            color: #e0e0e0;
                         }
                         tr:hover {
-                            background: #f5f5f5;
+                            background: #252525;
                             cursor: pointer;
                         }
                         .rank {
@@ -245,103 +252,112 @@ app.get('/leaderboard', async (req, res) => {
                             to { opacity: 1; }
                         }
                         .modal-content {
-                            background-color: #fefefe;
+                            background-color: #1a1a1a;
                             margin: 5% auto;
                             padding: 0;
-                            border: 1px solid #888;
+                            border: 2px solid #ffcc00;
                             width: 90%;
                             max-width: 900px;
                             max-height: 85vh;
                             border-radius: 8px;
-                            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                            box-shadow: 0 4px 20px rgba(255, 204, 0, 0.3);
                             display: flex;
                             flex-direction: column;
                         }
                         .modal-header {
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
+                            background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+                            color: #ffcc00;
                             padding: 20px;
                             border-radius: 8px 8px 0 0;
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
+                            border-bottom: 2px solid #ff3333;
                         }
                         .modal-header h2 {
                             margin: 0;
                             font-size: 1.5em;
                         }
                         .close {
-                            color: white;
+                            color: #ffcc00;
                             font-size: 32px;
                             font-weight: bold;
                             cursor: pointer;
                             line-height: 1;
-                            transition: transform 0.2s;
+                            transition: transform 0.2s, color 0.2s;
                         }
                         .close:hover,
                         .close:focus {
                             transform: rotate(90deg);
+                            color: #ff3333;
                         }
                         .modal-body {
                             padding: 20px;
                             overflow-y: auto;
                             flex: 1;
+                            background: #1a1a1a;
                         }
                         .json-container {
-                            background: #282c34;
-                            color: #abb2bf;
+                            background: #0a0a0a;
+                            color: #e0e0e0;
                             padding: 20px;
                             border-radius: 4px;
                             overflow-x: auto;
                             font-family: 'Courier New', monospace;
                             font-size: 13px;
                             line-height: 1.5;
+                            border: 1px solid #333;
                         }
                         .json-key {
-                            color: #e06c75;
+                            color: #ffcc00;
                         }
                         .json-string {
-                            color: #98c379;
+                            color: #ff9933;
                         }
                         .json-number {
-                            color: #d19a66;
+                            color: #ff6666;
                         }
                         .json-boolean {
-                            color: #56b6c2;
+                            color: #ffcc00;
                         }
                         .json-null {
-                            color: #c678dd;
+                            color: #999;
                         }
                         .copy-btn {
-                            background: #4CAF50;
-                            color: white;
+                            background: #ffcc00;
+                            color: #0a0a0a;
                             border: none;
                             padding: 10px 20px;
                             border-radius: 4px;
                             cursor: pointer;
                             font-size: 14px;
+                            font-weight: bold;
                             margin-top: 10px;
-                            transition: background 0.3s;
+                            transition: background 0.3s, transform 0.2s;
                         }
                         .copy-btn:hover {
-                            background: #45a049;
+                            background: #ff3333;
+                            color: white;
+                            transform: translateY(-2px);
                         }
                         .copy-btn:active {
-                            background: #3d8b40;
+                            background: #cc0000;
+                            transform: translateY(0);
                         }
                         .status-container {
                             margin-bottom: 20px;
                         }
                         .status-section {
-                            background: #f9f9f9;
+                            background: #252525;
                             border-radius: 6px;
                             padding: 15px;
                             margin-bottom: 15px;
+                            border: 1px solid #333;
                         }
                         .status-section h3 {
                             margin: 0 0 15px 0;
-                            color: #667eea;
-                            border-bottom: 2px solid #667eea;
+                            color: #ffcc00;
+                            border-bottom: 2px solid #ff3333;
                             padding-bottom: 8px;
                             font-size: 1.1em;
                         }
@@ -354,35 +370,38 @@ app.get('/leaderboard', async (req, res) => {
                             display: flex;
                             justify-content: space-between;
                             padding: 8px 12px;
-                            background: white;
+                            background: #1a1a1a;
                             border-radius: 4px;
-                            border-left: 3px solid #667eea;
+                            border-left: 3px solid #ffcc00;
                         }
                         .status-label {
                             font-weight: 600;
-                            color: #555;
+                            color: #999;
                         }
                         .status-value {
-                            color: #333;
+                            color: #ffcc00;
                             font-weight: 500;
                         }
                         .stats-table {
                             width: 100%;
-                            background: white;
+                            background: #1a1a1a;
                             border-radius: 4px;
                             overflow: hidden;
+                            border: 1px solid #333;
                         }
                         .stats-table th {
-                            background: #667eea;
-                            color: white;
+                            background: #2a2a2a;
+                            color: #ffcc00;
                             padding: 10px;
                             text-align: center;
                             font-size: 0.9em;
+                            border-bottom: 2px solid #ff3333;
                         }
                         .stats-table td {
                             padding: 10px;
                             text-align: center;
-                            border-bottom: 1px solid #eee;
+                            border-bottom: 1px solid #333;
+                            color: #e0e0e0;
                         }
                         .stats-table tr:last-child td {
                             border-bottom: none;
@@ -398,20 +417,22 @@ app.get('/leaderboard', async (req, res) => {
                         .tab-btn {
                             flex: 1;
                             padding: 10px 20px;
-                            background: #e0e0e0;
+                            background: #2a2a2a;
                             border: none;
                             cursor: pointer;
                             font-size: 14px;
                             font-weight: 600;
                             transition: all 0.3s;
                             border-radius: 4px 4px 0 0;
+                            color: #999;
                         }
                         .tab-btn.active {
-                            background: #667eea;
-                            color: white;
+                            background: #ffcc00;
+                            color: #0a0a0a;
                         }
                         .tab-btn:hover:not(.active) {
-                            background: #d0d0d0;
+                            background: #333;
+                            color: #ffcc00;
                         }
                         .tab-content {
                             display: none;
@@ -424,30 +445,30 @@ app.get('/leaderboard', async (req, res) => {
                         .rank-3 { color: #CD7F32; text-shadow: 0 0 10px rgba(205,127,50,0.5); }
                         .score {
                             font-weight: bold;
-                            color: #4CAF50;
+                            color: #ffcc00;
                             text-align: right;
                         }
                         .level {
                             text-align: center;
-                            color: #2196F3;
+                            color: #ff9933;
                             font-weight: bold;
                         }
                         .winner {
-                            background: #FFD700;
-                            color: #fff;
+                            background: #ffcc00;
+                            color: #0a0a0a;
                             padding: 2px 8px;
                             border-radius: 4px;
                             font-weight: bold;
                             font-size: 0.85em;
-                            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+                            text-shadow: none;
                         }
                         .depth {
                             text-align: center;
-                            color: #9C27B0;
+                            color: #ff6666;
                             font-weight: bold;
                         }
                         .timestamp {
-                            color: #999;
+                            color: #666;
                             font-size: 0.9em;
                         }
                         .no-scores {
@@ -460,18 +481,21 @@ app.get('/leaderboard', async (req, res) => {
                             display: block;
                             margin: 20px auto 0;
                             padding: 10px 30px;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
+                            background: linear-gradient(135deg, #ffcc00 0%, #ff9933 100%);
+                            color: #0a0a0a;
                             border: none;
                             border-radius: 25px;
                             cursor: pointer;
                             font-size: 1em;
-                            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                            transition: transform 0.2s;
+                            font-weight: bold;
+                            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.3);
+                            transition: transform 0.2s, box-shadow 0.2s;
                         }
                         .refresh-btn:hover {
                             transform: translateY(-2px);
-                            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+                            box-shadow: 0 6px 20px rgba(255, 51, 51, 0.5);
+                            background: linear-gradient(135deg, #ff3333 0%, #ff6666 100%);
+                            color: white;
                         }
                     </style>
                     <meta http-equiv="refresh" content="30">
