@@ -1,0 +1,73 @@
+{
+  "version": {
+    "format": "bakabakaband-creature-status",
+    "version": 1
+  },
+  "basic": {
+    "name": "ヒーロー",
+    "level": 50,
+    "experience": 12345678,
+    "max_experience": 12345678,
+    "age": 24,
+    "height": 175,
+    "weight": 68,
+    "prestige": 120,
+    "race": "ハーフエルフ",
+    "class": "戦士",
+    "sex": "男性",
+    "personality": "好戦的",
+    "realm1": "生命",
+    "realm2": "なし"
+  },
+  "stats": [
+    { "name": "STR", "current": 18, "max": 18, "use": 40, "top": 40 },
+    { "name": "INT", "current": 14, "max": 14, "use": 14, "top": 14 },
+    { "name": "WIS", "current": 13, "max": 13, "use": 13, "top": 13 },
+    { "name": "DEX", "current": 17, "max": 17, "use": 18, "top": 18 },
+    { "name": "CON", "current": 18, "max": 18, "use": 30, "top": 30 },
+    { "name": "CHR", "current": 12, "max": 12, "use": 12, "top": 12 }
+  ],
+  "status": {
+    "hitpoints": 540,
+    "max_hitpoints": 620,
+    "mana": 30,
+    "max_mana": 40,
+    "armor_class": 85,
+    "display_armor_class": 85,
+    "gold": 250000,
+    "dungeon_level": 88,
+    "max_dungeon_level": 99,
+    "game_turn": 1234567
+  },
+  "combat": {
+    "base_to_hit": 45,
+    "melee_to_hit": 60,
+    "melee_to_damage": 55,
+    "ranged_to_hit": 45,
+    "num_blow": 5,
+    "num_fire": 2
+  },
+  "skills": {
+    "fighting": 120,
+    "shooting": 90,
+    "saving_throw": 75,
+    "stealth": 5,
+    "perception": 8,
+    "searching": 30,
+    "disarming": 65,
+    "magic_device": 40,
+    "infravision": 30,
+    "speed": 10
+  },
+  "death": {
+    "is_dead": true,
+    "cause": "Morgoth, Lord of Darkness",
+    "killer_id": 1081,
+    "last_message": "ぐわー！"
+  },
+  "history": [
+    "あなたは騎士の子として生まれた。",
+    "あなたは家名に誇りを持っている。",
+    "あなたは青い瞳と茶色の髪を持ち、肌は色白である。"
+  ]
+}

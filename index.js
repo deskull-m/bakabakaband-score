@@ -8,6 +8,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SCORES_FILE = path.join(__dirname, 'scores.json');
 
+// Bakabakaband が送信してくる JSON のフォーマット識別子
+// (src/io-dump/player-status-dump-json.cpp の version.format に対応)
+const DUMP_FORMAT = 'bakabakaband-creature-status';
+
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -41,6 +45,105 @@ async function saveScores(scores) {
     }
 }
 
+// 最初に見つかった有限の数値を返すヘルパー (null / undefined / NaN はスキップ)
+function firstNumber(...values) {
+    for (const value of values) {
+        if (value === null || value === undefined) {
+            continue;
+        }
+        const n = Number(value);
+        if (Number.isFinite(n)) {
+            return n;
+        }
+    }
+    return 0;
+}
+
+// 最初に見つかった非空の文字列を返すヘルパー
+function firstString(...values) {
+    for (const value of values) {
+        if (value !== null && value !== undefined && String(value).length > 0) {
+            return String(value);
+        }
+    }
+    return null;
+}
+
+/*
+ * Bakabakaband のスコアを計算する。
+ *
+ * 本家 calc_score() (src/player/player-status.cpp) はゲームオプション
+ * (preserve_mode / autoroller / ironman 各種 / アリーナ成績 / 死亡回数 など)
+ * に依存しており、それらは送信される JSON に含まれない。
+ * そのため、ここでは calc_score の基礎式である
+ *     (max_max_exp + 100 * max_dungeon_level)
+ * を標準オプション (倍率 = 100%) として再現した近似スコアを採用する。
+ */
+function computeScore(basic, status) {
+    const maxExp = firstNumber(basic.max_experience, basic.experience, 0);
+    const maxDungeon = firstNumber(
+        status.max_dungeon_level,
+        status.dungeon_level,
+        0,
+    );
+    return Math.floor(maxExp + 100 * maxDungeon);
+}
+
+/*
+ * 受信した JSON ダンプを解析し、リーダーボード表示に必要な
+ * 正規化済みフィールドを抽出する。
+ *
+ * Bakabakaband の正式フォーマット (basic / status / stats / combat /
+ * skills / death / history のネスト構造) を第一に解釈しつつ、
+ * 旧来のフラットなテスト用フォーマットにもフォールバックする。
+ */
+function parseDump(dump) {
+    const basic = dump.basic || {};
+    const status = dump.status || {};
+    const death = dump.death || {};
+
+    const isDead = death.is_dead === true;
+    const isWinner = death.is_winner === true;
+
+    let deathCause;
+    if (isWinner) {
+        deathCause = firstString(death.cause, '見事生還を果たした！') || '勝利';
+    } else if (isDead) {
+        deathCause =
+            firstString(death.cause, dump.died_from, dump.last_message) ||
+            'Unknown';
+    } else {
+        deathCause = firstString(death.cause, dump.died_from) || '冒険中';
+    }
+
+    return {
+        characterName:
+            firstString(basic.name, dump.character_name, dump.name) || 'Unknown',
+        sex: firstString(basic.sex),
+        race: firstString(basic.race, dump.race, dump.prace) || 'Unknown',
+        class: firstString(basic.class, dump.class, dump.pclass) || 'Unknown',
+        personality: firstString(basic.personality),
+        realm1: firstString(basic.realm1),
+        realm2: firstString(basic.realm2),
+        level: firstNumber(basic.level, dump.level, dump.max_plv, 0),
+        experience: firstNumber(basic.experience, dump.exp, 0),
+        maxExperience: firstNumber(basic.max_experience, basic.experience, 0),
+        maxHp: firstNumber(status.max_hitpoints, dump.maxhp, 0),
+        gold: firstNumber(status.gold, dump.au, 0),
+        dungeonLevel: firstNumber(status.dungeon_level, dump.depth, 0),
+        maxDungeonLevel: firstNumber(
+            status.max_dungeon_level,
+            status.dungeon_level,
+            0,
+        ),
+        gameTurn: firstNumber(status.game_turn, dump.turns, 0),
+        deathCause,
+        isWinner,
+        isDead,
+        score: computeScore(basic, status),
+    };
+}
+
 // Root endpoint
 app.get('/', (req, res) => {
     res.send(`
@@ -66,7 +169,7 @@ app.get('/', (req, res) => {
                     <h1>🎮 Bakabakaband Score Server</h1>
                     <div class="info">
                         <p><strong>Welcome to the Bakabakaband Score Server!</strong></p>
-                        <p>This server accepts JSON game dumps from Bakabakaband and maintains a score leaderboard.</p>
+                        <p>This server accepts JSON game dumps from Bakabakaband (<code>${DUMP_FORMAT}</code>) and maintains a score leaderboard.</p>
                     </div>
 
                     <h2>Available Endpoints:</h2>
@@ -103,36 +206,31 @@ app.post('/submit', async (req, res) => {
         const dump = req.body;
 
         // Validate that we have some basic data
-        if (!dump || typeof dump !== 'object') {
+        if (!dump || typeof dump !== 'object' || Array.isArray(dump)) {
             return res.status(400).json({ error: 'Invalid JSON dump' });
         }
 
-        // Extract fields from nested structure (Bakabakaband format)
-        // or flat structure (legacy/test format)
-        const basic = dump.basic || {};
-        const status = dump.status || {};
-        const death = dump.death || {};
+        // Bakabakaband フォーマット (basic) でも旧テスト用フラット形式でも
+        // 何らかの識別可能なフィールドが無い場合は拒否する。
+        const hasKnownShape =
+            (dump.basic && typeof dump.basic === 'object') ||
+            dump.name ||
+            dump.character_name;
+        if (!hasKnownShape) {
+            return res.status(400).json({
+                error: 'Unrecognized dump format',
+                expectedFormat: DUMP_FORMAT,
+            });
+        }
 
-        // Create score entry
+        const parsed = parseDump(dump);
+
+        // Create score entry (生ダンプ全体も保持して詳細表示に利用する)
         const scoreEntry = {
             id: Date.now().toString(),
             timestamp: new Date().toISOString(),
-            dump: dump,
-            // Extract key fields - try nested structure first, then flat structure
-            characterName:
-        basic.name || dump.character_name || dump.name || 'Unknown',
-            level: basic.level || dump.level || dump.max_plv || 0,
-            experience: basic.experience || dump.exp || 0,
-            race: basic.race || dump.race || dump.prace || 'Unknown',
-            class: basic.class || dump.class || dump.pclass || 'Unknown',
-            deathCause:
-        death.cause || dump.died_from || dump.last_message || 'Unknown',
-            score: basic.experience || dump.score || dump.exp || 0,
-            // Additional useful fields
-            maxHp: status.max_hitpoints || dump.maxhp || 0,
-            gold: status.gold || dump.au || 0,
-            dungeonLevel: status.dungeon_level || dump.depth || 0,
-            isWinner: death.is_winner || false,
+            dump,
+            ...parsed,
         };
 
         // Load existing scores
@@ -151,6 +249,7 @@ app.post('/submit', async (req, res) => {
             success: true,
             message: 'Score submitted successfully',
             id: scoreEntry.id,
+            score: scoreEntry.score,
             rank: scores.findIndex((s) => s.id === scoreEntry.id) + 1,
         });
     } catch (error) {
@@ -336,7 +435,7 @@ app.get('/leaderboard', async (req, res) => {
                             cursor: pointer;
                             font-size: 14px;
                             font-weight: bold;
-                            margin-top: 10px;
+                            margin-bottom: 10px;
                             transition: background 0.3s, transform 0.2s;
                         }
                         .copy-btn:hover {
@@ -385,6 +484,19 @@ app.get('/leaderboard', async (req, res) => {
                         .status-value {
                             color: #ffcc00;
                             font-weight: 500;
+                        }
+                        .history-list {
+                            list-style: none;
+                            padding: 0;
+                            margin: 0;
+                        }
+                        .history-list li {
+                            padding: 8px 12px;
+                            background: #1a1a1a;
+                            border-radius: 4px;
+                            border-left: 3px solid #ff9933;
+                            margin-bottom: 6px;
+                            color: #e0e0e0;
                         }
                         .stats-table {
                             width: 100%;
@@ -522,7 +634,7 @@ app.get('/leaderboard', async (req, res) => {
                                         <th>Level</th>
                                         <th>Depth</th>
                                         <th>Score</th>
-                                        <th>Death</th>
+                                        <th>Result</th>
                                         <th>Date</th>
                                     </tr>
                                 </thead>
@@ -541,15 +653,19 @@ app.get('/leaderboard', async (req, res) => {
             const winnerBadge = score.isWinner
                 ? '<span class="winner">WINNER</span>'
                 : '';
+            const depth = firstNumber(
+                score.maxDungeonLevel,
+                score.dungeonLevel,
+            );
             return `
-                                            <tr onclick='showModal(${JSON.stringify(score).replace(/'/g, '&#39;')})'>
+                                            <tr onclick="showModalByIndex(${index})">
                                                 <td class="rank ${rankClass}">${index + 1}</td>
                                                 <td><strong>${escapeHtml(score.characterName)}</strong> ${winnerBadge}</td>
                                                 <td>${escapeHtml(score.race)}</td>
                                                 <td>${escapeHtml(score.class)}</td>
-                                                <td class="level">Lv.${score.level}</td>
-                                                <td class="depth">${score.dungeonLevel > 0 ? 'D:' + score.dungeonLevel : '-'}</td>
-                                                <td class="score">${score.score.toLocaleString()}</td>
+                                                <td class="level">Lv.${escapeHtml(score.level)}</td>
+                                                <td class="depth">${depth > 0 ? 'D:' + depth : '-'}</td>
+                                                <td class="score">${Number(score.score || 0).toLocaleString()}</td>
                                                 <td>${escapeHtml(score.deathCause)}</td>
                                                 <td class="timestamp">${date.toLocaleDateString()} ${date.toLocaleTimeString()}</td>
                                             </tr>
@@ -573,14 +689,14 @@ app.get('/leaderboard', async (req, res) => {
                             <div class="modal-body">
                                 <div class="tab-container">
                                     <div class="tab-buttons">
-                                        <button class="tab-btn active" onclick="switchTab('status')">📊 ステータス</button>
-                                        <button class="tab-btn" onclick="switchTab('json')">📄 JSON</button>
+                                        <button class="tab-btn active" onclick="switchTab(event, 'status')">📊 ステータス</button>
+                                        <button class="tab-btn" onclick="switchTab(event, 'json')">📄 JSON</button>
                                     </div>
-                                    
+
                                     <div id="statusTab" class="tab-content active">
                                         <div id="statusDisplay"></div>
                                     </div>
-                                    
+
                                     <div id="jsonTab" class="tab-content">
                                         <button class="copy-btn" onclick="copyJSON()">📋 Copy JSON to Clipboard</button>
                                         <div class="json-container">
@@ -593,20 +709,45 @@ app.get('/leaderboard', async (req, res) => {
                     </div>
 
                     <script>
+                        // サーバ側で読み込んだ全スコアをそのまま埋め込む
+                        const SCORES = ${JSON.stringify(scores)};
                         let currentScoreData = null;
 
-                        function switchTab(tabName) {
-                            // Update tab buttons
+                        function esc(value) {
+                            if (value === null || value === undefined) return '';
+                            return String(value)
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;')
+                                .replace(/'/g, '&#39;');
+                        }
+
+                        function fmtNum(value) {
+                            const n = Number(value);
+                            return Number.isFinite(n) ? n.toLocaleString() : '-';
+                        }
+
+                        function fmtSigned(value) {
+                            const n = Number(value);
+                            if (!Number.isFinite(n)) return '-';
+                            return (n >= 0 ? '+' : '') + n;
+                        }
+
+                        function switchTab(evt, tabName) {
                             document.querySelectorAll('.tab-btn').forEach(btn => {
                                 btn.classList.remove('active');
                             });
-                            event.target.classList.add('active');
-                            
-                            // Update tab content
+                            evt.target.classList.add('active');
+
                             document.querySelectorAll('.tab-content').forEach(content => {
                                 content.classList.remove('active');
                             });
                             document.getElementById(tabName + 'Tab').classList.add('active');
+                        }
+
+                        function showModalByIndex(index) {
+                            showModal(SCORES[index]);
                         }
 
                         function showModal(scoreData) {
@@ -614,19 +755,16 @@ app.get('/leaderboard', async (req, res) => {
                             const modal = document.getElementById('scoreModal');
                             const jsonDisplay = document.getElementById('jsonDisplay');
                             const statusDisplay = document.getElementById('statusDisplay');
-                            
-                            // Format JSON with syntax highlighting
+
                             jsonDisplay.innerHTML = syntaxHighlight(JSON.stringify(scoreData, null, 2));
-                            
-                            // Format status display
                             statusDisplay.innerHTML = formatStatusDisplay(scoreData);
-                            
+
                             // Reset to status tab
                             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
                             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
                             document.querySelector('.tab-btn').classList.add('active');
                             document.getElementById('statusTab').classList.add('active');
-                            
+
                             modal.style.display = 'block';
                             document.body.style.overflow = 'hidden';
                         }
@@ -636,119 +774,145 @@ app.get('/leaderboard', async (req, res) => {
                             const basic = dump.basic || {};
                             const status = dump.status || {};
                             const stats = dump.stats || [];
+                            const combat = dump.combat || {};
+                            const skills = dump.skills || {};
                             const death = dump.death || {};
-                            
+                            const history = dump.history || [];
+
                             let html = '<div class="status-container">';
-                            
-                            // Basic Information Section
+
+                            // 基本情報
                             html += '<div class="status-section">';
                             html += '<h3>🎮 基本情報</h3>';
                             html += '<div class="status-grid">';
-                            html += formatStatusItem('名前', basic.name || data.characterName || 'Unknown');
-                            html += formatStatusItem('性別', basic.sex || '-');
-                            html += formatStatusItem('種族', basic.race || data.race || 'Unknown');
-                            html += formatStatusItem('職業', basic.class || data.class || 'Unknown');
-                            html += formatStatusItem('年齢', basic.age ? basic.age + '才' : '-');
-                            html += formatStatusItem('身長', basic.height ? basic.height + 'cm' : '-');
-                            html += formatStatusItem('体重', basic.weight ? basic.weight + 'kg' : '-');
-                            html += formatStatusItem('社会的地位', basic.prestige || '-');
-                            html += formatStatusItem('性格', basic.personality || '-');
-                            html += '</div>';
-                            html += '</div>';
-                            
-                            // Stats Section
+                            html += item('名前', esc(basic.name || data.characterName || 'Unknown'));
+                            html += item('性別', esc(basic.sex || data.sex || '-'));
+                            html += item('種族', esc(basic.race || data.race || 'Unknown'));
+                            html += item('職業', esc(basic.class || data.class || 'Unknown'));
+                            html += item('性格', esc(basic.personality || data.personality || '-'));
+                            if (basic.realm1) html += item('魔法領域1', esc(basic.realm1));
+                            if (basic.realm2) html += item('魔法領域2', esc(basic.realm2));
+                            if (basic.mimic_form) html += item('変身形態', esc(basic.mimic_form));
+                            if (basic.monrace) html += item('モンスター種族', esc(basic.monrace));
+                            html += item('年齢', basic.age ? esc(basic.age) + '才' : '-');
+                            html += item('身長', basic.height ? esc(basic.height) + 'cm' : '-');
+                            html += item('体重', basic.weight ? esc(basic.weight) + 'kg' : '-');
+                            html += item('社会的地位', basic.prestige !== undefined ? esc(basic.prestige) : '-');
+                            html += '</div></div>';
+
+                            // 能力値
                             if (stats.length > 0) {
                                 html += '<div class="status-section">';
                                 html += '<h3>💪 能力値</h3>';
-                                html += '<table class="stats-table">';
-                                html += '<thead><tr>';
+                                html += '<table class="stats-table"><thead><tr>';
                                 html += '<th>能力</th><th>現在値</th><th>最大値</th><th>使用値</th><th>最高値</th>';
                                 html += '</tr></thead><tbody>';
-                                
                                 stats.forEach(stat => {
                                     html += '<tr>';
-                                    html += \`<td><strong>\${stat.name}</strong></td>\`;
-                                    html += \`<td>\${stat.current || '-'}</td>\`;
-                                    html += \`<td>\${stat.max || '-'}</td>\`;
-                                    html += \`<td>\${stat.use || '-'}</td>\`;
-                                    html += \`<td>\${stat.top || '-'}</td>\`;
+                                    html += '<td><strong>' + esc(stat.name) + '</strong></td>';
+                                    html += '<td>' + esc(stat.current ?? '-') + '</td>';
+                                    html += '<td>' + esc(stat.max ?? '-') + '</td>';
+                                    html += '<td>' + esc(stat.use ?? '-') + '</td>';
+                                    html += '<td>' + esc(stat.top ?? '-') + '</td>';
                                     html += '</tr>';
                                 });
-                                
-                                html += '</tbody></table>';
-                                html += '</div>';
+                                html += '</tbody></table></div>';
                             }
-                            
-                            // Combat & Status Section
+
+                            // ステータス
                             html += '<div class="status-section">';
-                            html += '<h3>⚔️ 戦闘・ステータス</h3>';
+                            html += '<h3>📈 ステータス</h3>';
                             html += '<div class="status-grid">';
-                            html += formatStatusItem('レベル', basic.level || data.level || '1');
-                            html += formatStatusItem('経験値', (basic.experience || data.experience || 0).toLocaleString());
-                            html += formatStatusItem('最大経験値', (basic.max_experience || 0).toLocaleString());
-                            html += formatStatusItem('HP', \`\${status.current_hitpoints || 0} / \${status.max_hitpoints || data.maxHp || 0}\`);
-                            html += formatStatusItem('MP', \`\${status.current_mana || 0} / \${status.max_mana || 0}\`);
-                            html += formatStatusItem('AC', status.armor_class || '-');
-                            html += formatStatusItem('所持金', (status.gold || data.gold || 0).toLocaleString() + ' Au');
-                            html += formatStatusItem('ダンジョンレベル', status.dungeon_level || data.dungeonLevel || '-');
-                            html += '</div>';
-                            html += '</div>';
-                            
-                            // Combat Details
-                            if (dump.combat) {
-                                const combat = dump.combat;
+                            html += item('レベル', esc(basic.level ?? data.level ?? '1'));
+                            html += item('経験値', fmtNum(basic.experience ?? data.experience ?? 0));
+                            html += item('最大経験値', fmtNum(basic.max_experience ?? data.maxExperience ?? 0));
+                            html += item('HP', fmtNum(status.hitpoints ?? 0) + ' / ' + fmtNum(status.max_hitpoints ?? data.maxHp ?? 0));
+                            html += item('MP', fmtNum(status.mana ?? 0) + ' / ' + fmtNum(status.max_mana ?? 0));
+                            html += item('AC', status.display_armor_class ?? status.armor_class ?? '-');
+                            html += item('所持金', fmtNum(status.gold ?? data.gold ?? 0) + ' Au');
+                            html += item('現在地深度', status.dungeon_level ?? data.dungeonLevel ?? '-');
+                            html += item('最深到達深度', status.max_dungeon_level ?? data.maxDungeonLevel ?? '-');
+                            html += item('ゲームターン', fmtNum(status.game_turn ?? data.gameTurn ?? 0));
+                            html += '</div></div>';
+
+                            // 戦闘能力
+                            if (Object.keys(combat).length > 0) {
                                 html += '<div class="status-section">';
-                                html += '<h3>🗡️ 戦闘詳細</h3>';
+                                html += '<h3>🗡️ 戦闘能力</h3>';
                                 html += '<div class="status-grid">';
-                                html += formatStatusItem('打撃命中', combat.melee_hit || '-');
-                                html += formatStatusItem('射撃命中', combat.ranged_hit || '-');
-                                html += formatStatusItem('魔法防御', combat.magic_defense || '-');
-                                html += formatStatusItem('隠密行動', combat.stealth || '-');
-                                html += formatStatusItem('知覚', combat.perception || '-');
-                                html += formatStatusItem('探索', combat.searching || '-');
-                                html += formatStatusItem('解除', combat.disarming || '-');
-                                html += formatStatusItem('魔法道具', combat.magic_device || '-');
-                                html += '</div>';
-                                html += '</div>';
+                                html += item('基本命中', fmtSigned(combat.base_to_hit));
+                                html += item('打撃命中', fmtSigned(combat.melee_to_hit));
+                                html += item('打撃ダメージ', fmtSigned(combat.melee_to_damage));
+                                html += item('射撃命中', fmtSigned(combat.ranged_to_hit));
+                                html += item('攻撃回数', combat.num_blow ?? '-');
+                                html += item('射撃回数', combat.num_fire ?? '-');
+                                html += '</div></div>';
                             }
-                            
-                            // Death Information
+
+                            // スキル
+                            if (Object.keys(skills).length > 0) {
+                                html += '<div class="status-section">';
+                                html += '<h3>🛡️ スキル</h3>';
+                                html += '<div class="status-grid">';
+                                html += item('打撃技能', skills.fighting ?? '-');
+                                html += item('射撃技能', skills.shooting ?? '-');
+                                html += item('魔法防御', skills.saving_throw ?? '-');
+                                html += item('隠密', skills.stealth ?? '-');
+                                html += item('知覚', skills.perception ?? '-');
+                                html += item('探索', skills.searching ?? '-');
+                                html += item('解除', skills.disarming ?? '-');
+                                html += item('魔法道具', skills.magic_device ?? '-');
+                                html += item('赤外線視力', (skills.infravision ?? 0) + ' ft');
+                                html += item('スピード', fmtSigned(skills.speed));
+                                html += '</div></div>';
+                            }
+
+                            // 死亡・結果
                             html += '<div class="status-section">';
-                            html += '<h3>💀 死因・結果</h3>';
+                            html += '<h3>💀 結果</h3>';
                             html += '<div class="status-grid">';
-                            html += formatStatusItem('状態', death.is_winner || data.isWinner ? '🏆 勝利' : '💀 死亡');
-                            html += formatStatusItem('死因', death.cause || data.deathCause || 'Unknown');
-                            if (death.killer) {
-                                html += formatStatusItem('殺害者', death.killer);
+                            const resultLabel = (death.is_winner || data.isWinner)
+                                ? '🏆 勝利'
+                                : ((death.is_dead || data.isDead) ? '💀 死亡' : '⚔️ 冒険中');
+                            html += item('状態', resultLabel);
+                            html += item('死因', esc(death.cause || data.deathCause || '-'));
+                            if (death.killer_id !== undefined) html += item('殺害者ID', esc(death.killer_id));
+                            if (death.last_message) html += item('最期の言葉', esc(death.last_message));
+                            html += '</div></div>';
+
+                            // 履歴
+                            if (history.length > 0) {
+                                html += '<div class="status-section">';
+                                html += '<h3>📜 来歴</h3>';
+                                html += '<ul class="history-list">';
+                                history.forEach(line => {
+                                    html += '<li>' + esc(line) + '</li>';
+                                });
+                                html += '</ul></div>';
                             }
-                            if (death.location) {
-                                html += formatStatusItem('死亡場所', death.location);
-                            }
-                            html += '</div>';
-                            html += '</div>';
-                            
-                            // Timestamp
+
+                            // 記録情報
                             html += '<div class="status-section">';
                             html += '<h3>📅 記録情報</h3>';
                             html += '<div class="status-grid">';
-                            html += formatStatusItem('記録ID', data.id);
+                            html += item('スコア', fmtNum(data.score));
+                            html += item('記録ID', esc(data.id));
                             const date = new Date(data.timestamp);
-                            html += formatStatusItem('記録日時', date.toLocaleString('ja-JP'));
-                            html += formatStatusItem('ランク', data.rank || '-');
-                            html += '</div>';
-                            html += '</div>';
-                            
+                            html += item('記録日時', date.toLocaleString('ja-JP'));
+                            if (dump.version) {
+                                html += item('フォーマット', esc(dump.version.format) + ' v' + esc(dump.version.version));
+                            }
+                            html += '</div></div>';
+
                             html += '</div>';
                             return html;
                         }
-                        
-                        function formatStatusItem(label, value) {
-                            return \`
-                                <div class="status-item">
-                                    <span class="status-label">\${label}:</span>
-                                    <span class="status-value">\${value}</span>
-                                </div>
-                            \`;
+
+                        function item(label, value) {
+                            return '<div class="status-item">' +
+                                '<span class="status-label">' + label + ':</span>' +
+                                '<span class="status-value">' + value + '</span>' +
+                                '</div>';
                         }
 
                         function closeModal() {
@@ -765,16 +929,13 @@ app.get('/leaderboard', async (req, res) => {
 
                         function copyJSON() {
                             if (!currentScoreData) return;
-
                             const jsonText = JSON.stringify(currentScoreData, null, 2);
+                            const btn = event.target;
                             navigator.clipboard.writeText(jsonText).then(() => {
-                                const btn = event.target;
                                 const originalText = btn.textContent;
                                 btn.textContent = '✅ Copied!';
-                                btn.style.background = '#45a049';
                                 setTimeout(() => {
                                     btn.textContent = originalText;
-                                    btn.style.background = '#4CAF50';
                                 }, 2000);
                             }).catch(err => {
                                 alert('Failed to copy: ' + err);
@@ -783,14 +944,10 @@ app.get('/leaderboard', async (req, res) => {
 
                         function syntaxHighlight(json) {
                             json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(s*:)?|\b(true|false|null)\b|-?d+(?:.d*)?(?:[eE][+-]?d+)?)/g, function (match) {
+                            return json.replace(/("(\\\\u[a-zA-Z0-9]{4}|\\\\[^u]|[^\\\\"])*"(\\s*:)?|\\b(true|false|null)\\b|-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?)/g, function (match) {
                                 let cls = 'json-number';
                                 if (/^"/.test(match)) {
-                                    if (/:$/.test(match)) {
-                                        cls = 'json-key';
-                                    } else {
-                                        cls = 'json-string';
-                                    }
+                                    cls = /:$/.test(match) ? 'json-key' : 'json-string';
                                 } else if (/true|false/.test(match)) {
                                     cls = 'json-boolean';
                                 } else if (/null/.test(match)) {
@@ -800,7 +957,6 @@ app.get('/leaderboard', async (req, res) => {
                             });
                         }
 
-                        // Close modal on ESC key
                         document.addEventListener('keydown', function(event) {
                             if (event.key === 'Escape') {
                                 closeModal();
@@ -862,4 +1018,10 @@ async function startServer() {
     });
 }
 
-startServer().catch(console.error);
+// Export for testing
+module.exports = { app, parseDump, computeScore, firstNumber, firstString };
+
+// テスト実行時 (require) はサーバを起動しない
+if (require.main === module) {
+    startServer().catch(console.error);
+}
