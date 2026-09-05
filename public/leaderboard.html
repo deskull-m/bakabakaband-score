@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bakabakaband Leaderboard</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Bakabakaband Leaderboard</h1>
+        <div class="subtitle" id="subtitle">読み込み中...</div>
+        <div class="controls">
+            <button id="refresh" type="button">更新</button>
+            <label><input type="checkbox" id="hide-flagged"> 要確認の記録を隠す</label>
+        </div>
+        <div class="table-wrap">
+            <table id="scores" hidden>
+                <thead>
+                    <tr>
+                        <th>#</th><th>名前</th><th>種族</th><th>職業</th><th>Lv</th>
+                        <th>階</th><th>スコア</th><th>死因</th><th>バージョン</th><th>日時</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="no-scores" id="empty" hidden>まだ記録がありません。</div>
+    </div>
+
+    <dialog id="detail">
+        <div class="modal-header">
+            <h2 id="detail-title"></h2>
+            <button type="button" id="detail-close">閉じる</button>
+        </div>
+        <div class="controls">
+            <button type="button" data-tab="status">ステータス</button>
+            <button type="button" data-tab="dump">キャラクターダンプ</button>
+            <button type="button" data-tab="screen">スクリーンショット</button>
+            <button type="button" data-tab="json">JSON</button>
+        </div>
+        <section data-panel="status"><dl class="grid" id="detail-status"></dl></section>
+        <section data-panel="dump" hidden><pre id="detail-dump"></pre></section>
+        <section data-panel="screen" hidden><iframe id="detail-screen" class="dump-frame" sandbox="" title="screen dump"></iframe></section>
+        <section data-panel="json" hidden><pre id="detail-json"></pre></section>
+    </dialog>
+
+    <script src="/leaderboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bakabakaband Score Server</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Bakabakaband Score Server</h1>
+        <p>馬鹿馬鹿蛮怒からのスコア登録 (JSON) を受け付け、ランキングを表示します。</p>
+
+        <h2>エンドポイント</h2>
+        <div class="endpoint">
+            <h3><a href="/leaderboard">GET /leaderboard</a></h3>
+            <p>ランキング (HTML)</p>
+        </div>
+        <div class="endpoint">
+            <h3><a href="/scores">GET /scores</a></h3>
+            <p>ランキング (JSON)。<code>?limit=</code> と <code>?offset=</code> でページング。</p>
+        </div>
+        <div class="endpoint">
+            <h3>GET /scores/:id</h3>
+            <p>1 件の詳細 (送信されたデータ全体を含む)</p>
+        </div>
+        <div class="endpoint">
+            <h3>POST /submit</h3>
+            <p>スコア登録。<code>Content-Type: application/json</code> で <code>schema/ScoreSubmission.schema.json</code> に従うデータを送る。</p>
+            <p><small><code>curl -X POST http://localhost:3000/submit -H "Content-Type: application/json" -d @submission.json</code></small></p>
+        </div>
+        <div class="endpoint">
+            <h3>DELETE /scores/:id, POST /scores/:id/verify</h3>
+            <p>管理操作。<code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code> が必要。</p>
+        </div>
+    </div>
+</body>
+</html>
