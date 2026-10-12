@@ -3,8 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const Database = require('better-sqlite3');
 const { contentHash } = require('./canonical');
+
+const ATTACHMENT_KINDS = ['character_dump', 'screen_dump'];
 
 /*!
  * スキーマのマイグレーション。PRAGMA user_version を適用済みの番号として使う。
@@ -52,7 +55,42 @@ const MIGRATIONS = [
     `
     CREATE INDEX IF NOT EXISTS scores_created_at_idx ON scores (created_at);
     `,
+    // 4: 添付 (キャラクターダンプ・スクリーンショット) を分離して gzip 保存 (#12)
+    `
+    CREATE TABLE IF NOT EXISTS attachments (
+        score_id    TEXT NOT NULL REFERENCES scores(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        size        INTEGER NOT NULL,
+        body_gz     BLOB NOT NULL,
+        PRIMARY KEY (score_id, kind)
+    );
+    `,
 ];
+
+/*!
+ * スキーマ変更に伴うデータ移行。キーはマイグレーション番号 (適用後の user_version)。
+ */
+const DATA_MIGRATIONS = {
+    // scores.submission に埋め込まれていた添付を attachments テーブルへ移す
+    4(db) {
+        const rows = db.prepare('SELECT id, submission FROM scores').all();
+        const update = db.prepare('UPDATE scores SET submission = ? WHERE id = ?');
+        const insert = db.prepare('INSERT OR REPLACE INTO attachments (score_id, kind, size, body_gz) VALUES (?, ?, ?, ?)');
+        for (const row of rows) {
+            const submission = JSON.parse(row.submission);
+            if (!submission.attachments) {
+                continue;
+            }
+            for (const [kind, body] of Object.entries(submission.attachments)) {
+                if (typeof body === 'string' && body.length > 0) {
+                    insert.run(row.id, kind, Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
+                }
+            }
+            delete submission.attachments;
+            update.run(JSON.stringify(submission), row.id);
+        }
+    },
+};
 
 const SUMMARY_COLUMNS = `
     id, created_at, name, race, class, sex, personality, level, max_level,
@@ -79,6 +117,7 @@ class ScoreStore {
         }
         this.db = new Database(dbPath);
         this.db.pragma('journal_mode = WAL');
+        this.db.pragma('foreign_keys = ON');
         this.migrate();
 
         this.insertStmt = this.db.prepare(`
@@ -104,6 +143,10 @@ class ScoreStore {
         this.getStmt = this.db.prepare(`SELECT ${SUMMARY_COLUMNS}, submission FROM scores WHERE id = ?`);
         this.deleteStmt = this.db.prepare('DELETE FROM scores WHERE id = ?');
         this.verifyStmt = this.db.prepare('UPDATE scores SET verified = ? WHERE id = ?');
+        this.insertAttachmentStmt = this.db.prepare(
+            'INSERT INTO attachments (score_id, kind, size, body_gz) VALUES (?, ?, ?, ?)');
+        this.listAttachmentsStmt = this.db.prepare('SELECT kind, size FROM attachments WHERE score_id = ?');
+        this.getAttachmentStmt = this.db.prepare('SELECT size, body_gz FROM attachments WHERE score_id = ? AND kind = ?');
     }
 
     migrate() {
@@ -111,6 +154,9 @@ class ScoreStore {
         for (let v = current; v < MIGRATIONS.length; v++) {
             this.db.transaction(() => {
                 this.db.exec(MIGRATIONS[v]);
+                if (DATA_MIGRATIONS[v + 1]) {
+                    DATA_MIGRATIONS[v + 1](this.db);
+                }
                 this.db.pragma(`user_version = ${v + 1}`);
             })();
         }
@@ -130,6 +176,7 @@ class ScoreStore {
         const game = submission.game || {};
 
         const points = pointsComputed !== null ? pointsComputed : submission.score.points;
+        const { attachments, ...stored } = submission;
         const row = {
             id: crypto.randomUUID(),
             created_at: new Date().toISOString(),
@@ -154,7 +201,7 @@ class ScoreStore {
             platform: game.platform || null,
             verified: 0,
             flags: JSON.stringify(flags),
-            submission: JSON.stringify(submission),
+            submission: JSON.stringify(stored),
             submission_id: submission.submission_id || null,
             content_hash: contentHash(submission),
         };
@@ -166,6 +213,12 @@ class ScoreStore {
                 return { id: existing.id, rank, duplicate: true };
             }
             this.insertStmt.run(row);
+            for (const kind of ATTACHMENT_KINDS) {
+                const body = attachments && attachments[kind];
+                if (typeof body === 'string' && body.length > 0) {
+                    this.insertAttachmentStmt.run(row.id, kind, Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
+                }
+            }
             const rank = this.rankStmt.get(points, points, row.created_at).rank;
             return { id: row.id, rank, duplicate: false };
         });
@@ -191,7 +244,26 @@ class ScoreStore {
         }
         const summary = rowToSummary(row);
         summary.submission = JSON.parse(row.submission);
+        summary.attachments = {};
+        for (const a of this.listAttachmentsStmt.all(id)) {
+            summary.attachments[a.kind] = { size: a.size };
+        }
         return summary;
+    }
+
+    /*!
+     * 添付を展開して返す。無ければ null。
+     * @returns {{ size: number, body: string } | null}
+     */
+    getAttachment(id, kind) {
+        if (!ATTACHMENT_KINDS.includes(kind)) {
+            return null;
+        }
+        const row = this.getAttachmentStmt.get(id, kind);
+        if (!row) {
+            return null;
+        }
+        return { size: row.size, body: zlib.gunzipSync(row.body_gz).toString('utf8') };
     }
 
     delete(id) {
@@ -207,4 +279,4 @@ class ScoreStore {
     }
 }
 
-module.exports = { ScoreStore, MIGRATIONS };
+module.exports = { ScoreStore, MIGRATIONS, ATTACHMENT_KINDS };

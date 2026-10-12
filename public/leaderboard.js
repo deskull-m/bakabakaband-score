@@ -93,10 +93,35 @@
         dl.appendChild(el('dd', value));
     }
 
+    let pendingAttachments = null;
+
+    async function fetchAttachment(kind) {
+        if (!pendingAttachments || !pendingAttachments.kinds[kind]) {
+            return null;
+        }
+        const res = await fetch('/scores/' + encodeURIComponent(pendingAttachments.id) + '/attachments/' + kind);
+        delete pendingAttachments.kinds[kind];
+        return res.ok ? res.text() : null;
+    }
+
     function showTab(name) {
         dialog.querySelectorAll('[data-panel]').forEach(function (panel) {
             panel.hidden = panel.dataset.panel !== name;
         });
+        if (name === 'dump') {
+            fetchAttachment('character_dump').then(function (text) {
+                if (text !== null) {
+                    document.getElementById('detail-dump').textContent = text;
+                }
+            });
+        } else if (name === 'screen') {
+            // スクリーンショットは HTML なので、スクリプト実行不可の sandbox iframe に閉じ込める
+            fetchAttachment('screen_dump').then(function (text) {
+                if (text !== null) {
+                    document.getElementById('detail-screen').srcdoc = text;
+                }
+            });
+        }
     }
 
     async function openDetail(id) {
@@ -141,10 +166,11 @@
             addItem(dl, '履歴 ' + (i + 1), line);
         });
 
-        const attachments = sub.attachments || {};
-        document.getElementById('detail-dump').textContent = attachments.character_dump || '(添付なし)';
-        // スクリーンショットは HTML なので、スクリプト実行不可の sandbox iframe に閉じ込める
-        document.getElementById('detail-screen').srcdoc = attachments.screen_dump || '<p>(添付なし)</p>';
+        // 添付は大きいので、タブを開いたときに個別に取得する
+        const attachments = entry.attachments || {};
+        pendingAttachments = { id: id, kinds: attachments };
+        document.getElementById('detail-dump').textContent = attachments.character_dump ? '(読み込み中...)' : '(添付なし)';
+        document.getElementById('detail-screen').srcdoc = attachments.screen_dump ? '<p>(読み込み中...)</p>' : '<p>(添付なし)</p>';
         document.getElementById('detail-json').textContent = JSON.stringify(sub, null, 2);
 
         showTab('status');

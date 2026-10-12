@@ -77,7 +77,13 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 
 ### `GET /scores/:id`
 
-1 件の詳細。送信された JSON 全体を `submission` に含む。
+1 件の詳細。送信された JSON を `submission` に含む (添付は除く)。
+添付の有無とサイズは `attachments: { character_dump: { size }, screen_dump: { size } }` で分かる。
+
+### `GET /scores/:id/attachments/:kind`
+
+添付 (`character_dump` または `screen_dump`) の本文。常に `text/plain` と `Content-Security-Policy: sandbox` で返すので、
+スクリーンショット (HTML) を直リンクで開いても文書として解釈されない。ランキングページは取得した本文を sandbox iframe に流し込んで表示する。
 
 ### `GET /leaderboard`
 
@@ -112,6 +118,10 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 npm run backup                      # <DATA_DIR>/backups/scores-<日時>.sqlite に書き出す
 npm run backup -- /mnt/backup/score # 出力先を指定
 ```
+
+添付は `attachments` テーブルに gzip 圧縮して保存する (テキストなので概ね 1/5 以下になる)。
+記録を大量に削除した後にファイルサイズを戻したい場合は、サーバを止めて `sqlite3 data/scores.sqlite VACUUM` を実行する
+(WAL のチェックポイントも同時に行われる)。
 
 SQLite のオンラインバックアップ API を使うので、サーバを止めずに整合したコピーが取れる。
 `BACKUP_KEEP` (既定 14) 世代より古いものは削除する。復元はサーバを止めて `scores.sqlite` を差し替えるだけでよい

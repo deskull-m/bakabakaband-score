@@ -168,6 +168,19 @@ function createApp(config) {
         return res.json(entry);
     });
 
+    // 添付は常に text/plain で返す。スクリーンショットは HTML だが、直リンクで開かれても
+    // ブラウザに文書として解釈させない。ランキングページ側で sandbox iframe に流し込む
+    app.get('/scores/:id/attachments/:kind', readCors, (req, res) => {
+        const attachment = store.getAttachment(req.params.id, req.params.kind);
+        if (!attachment) {
+            return res.status(404).json({ error: 'attachment not found' });
+        }
+        res.type('text/plain; charset=utf-8');
+        res.set('Content-Security-Policy', 'sandbox');
+        res.set('Content-Disposition', `inline; filename="${req.params.kind}.txt"`);
+        return res.send(attachment.body);
+    });
+
     // --- 管理操作 -----------------------------------------------------------
     app.delete('/scores/:id', adminAuth, (req, res) => {
         if (!store.delete(req.params.id)) {
