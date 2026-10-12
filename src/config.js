@@ -38,6 +38,10 @@ function loadConfig(env = process.env) {
         statsIntervalMs: env.STATS_INTERVAL_MS !== undefined ? Number(env.STATS_INTERVAL_MS) : 60 * 60 * 1000,
         // 一覧 API の 1 ページ最大件数
         maxPageSize: Number(env.MAX_PAGE_SIZE) || 200,
+        // 疑わしさの合計がこれ以上の未検証の記録は、既定のランキング表示から外す (0 で無効)
+        suspicionHideThreshold: env.SUSPICION_HIDE_THRESHOLD !== undefined ? Number(env.SUSPICION_HIDE_THRESHOLD) : 3,
+        // レベル 1 上げるのに最低限かかるはずの実ターン数。下回ると level_too_fast (0 で無効)
+        minTurnsPerLevel: Number(env.MIN_TURNS_PER_LEVEL) || 0,
     };
 }
 

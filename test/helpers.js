@@ -32,7 +32,7 @@ function creatureStatus(overrides = {}) {
     return Object.assign({
         version: { format: 'bakabakaband-creature-status', version: 1 },
         basic: {
-            name: 'テスト', level: 30, experience: 500000, max_experience: 500000,
+            name: 'テスト', level: 30, experience: 90000, max_experience: 90000,
             race: 'ホビット', class: '戦士', sex: '男性', personality: 'ふつう',
         },
         stats: [{ name: 'STR', current: 18, max: 18, use: 18, top: 18 }],
@@ -51,7 +51,7 @@ function envelope(overrides = {}) {
         format_version: 1,
         game: { version: '0.0.1-test', platform: 'x11', locale: 'ja' },
         score: {
-            points: 5045000,
+            points: 945000,
             options: {
                 preserve_mode: true, autoroller: true, smart_learn: true, smart_cheat: false,
                 ironman_shops: false, ironman_smallest_floor: false, ironman_force_arena_floor: false,
@@ -60,7 +60,7 @@ function envelope(overrides = {}) {
             arena_wins: -1,
         },
         progress: {
-            max_level: 30, max_max_experience: 500000, real_turns: 123456, play_time_sec: 3600,
+            max_level: 30, max_max_experience: 90000, real_turns: 123456, play_time_sec: 3600,
             max_depth_overall: 45, death_count: 0, total_winner: false, true_winner: false,
         },
         character: creatureStatus(),

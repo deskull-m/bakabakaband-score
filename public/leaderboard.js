@@ -9,7 +9,7 @@
     const table = document.getElementById('scores');
     const empty = document.getElementById('empty');
     const subtitle = document.getElementById('subtitle');
-    const hideFlagged = document.getElementById('hide-flagged');
+    const showFlagged = document.getElementById('show-flagged');
     const dialog = document.getElementById('detail');
     const filters = document.getElementById('filters');
     const pager = document.getElementById('pager');
@@ -29,7 +29,7 @@
             since: q.get('since') || '',
             until: q.get('until') || '',
             winner: q.get('winner') === '1',
-            hideFlagged: q.get('hide_flagged') === '1',
+            showFlagged: q.get('show_flagged') === '1',
         };
     }
 
@@ -41,7 +41,7 @@
             if (state[k]) { q.set(k, state[k]); }
         });
         if (state.winner) { q.set('winner', '1'); }
-        if (state.hideFlagged) { q.set('hide_flagged', '1'); }
+        if (state.showFlagged) { q.set('show_flagged', '1'); }
         const qs = q.toString();
         history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
     }
@@ -57,7 +57,7 @@
             since: filters.since.value,
             until: filters.until.value,
             winner: filters.winner.checked,
-            hideFlagged: hideFlagged.checked,
+            showFlagged: showFlagged.checked,
         };
     }
 
@@ -69,7 +69,7 @@
         filters.since.value = state.since;
         filters.until.value = state.until;
         filters.winner.checked = state.winner;
-        hideFlagged.checked = state.hideFlagged;
+        showFlagged.checked = state.showFlagged;
         document.querySelectorAll('.tab').forEach(function (b) {
             b.classList.toggle('active', b.dataset.sort === state.sort);
         });
@@ -90,6 +90,7 @@
             q.set('until', d.toISOString());
         }
         if (state.winner) { q.set('winner', '1'); }
+        if (state.showFlagged) { q.set('include_flagged', '1'); }
         return q.toString();
     }
 
@@ -130,8 +131,8 @@
         if (score.verified) {
             nameCell.appendChild(badge('検証済', 'verified'));
         } else if (score.flags.length > 0) {
-            const b = badge('要確認', 'flag');
-            b.title = score.flags.join(', ');
+            const b = badge(score.suspicion >= 3 ? '疑わしい' : '要確認', 'flag');
+            b.title = score.flags.join(', ') + ' (' + score.suspicion + ')';
             nameCell.appendChild(b);
         }
         tr.appendChild(nameCell);
@@ -164,12 +165,7 @@
         subtitle.textContent = '読み込み中...';
         const res = await fetch('/scores?' + queryFromState(state));
         const data = await res.json();
-        let scores = data.scores;
-        if (state.hideFlagged) {
-            scores = scores.filter(function (s) {
-                return s.verified || s.flags.length === 0;
-            });
-        }
+        const scores = data.scores;
         tbody.replaceChildren();
         scores.forEach(function (score, i) {
             tbody.appendChild(renderRow(score, i));
@@ -352,12 +348,12 @@
         state = stateFromForm(state);
         reload();
     });
-    hideFlagged.addEventListener('change', function () {
+    showFlagged.addEventListener('change', function () {
         state = stateFromForm(state);
         reload();
     });
     document.getElementById('clear').addEventListener('click', function () {
-        state = { sort: state.sort === 'stats' ? 'points' : state.sort, page: 0, race: '', class: '', version: '', name: '', since: '', until: '', winner: false, hideFlagged: false };
+        state = { sort: state.sort === 'stats' ? 'points' : state.sort, page: 0, race: '', class: '', version: '', name: '', since: '', until: '', winner: false, showFlagged: false };
         reload();
     });
     document.querySelectorAll('.tab').forEach(function (b) {

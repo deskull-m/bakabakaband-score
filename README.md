@@ -32,6 +32,8 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 | `MIN_FREE_DISK_MB` | `1024` | DB のあるディスクの空きがこれを切ったら `/submit` が 503。`0` で無効 |
 | `STATS_INTERVAL_MS` | `3600000` | 受付・拒否などの件数をログに出す間隔。`0` で無効 |
 | `MAX_PAGE_SIZE` | `200` | `GET /scores` の 1 ページ最大件数 |
+| `SUSPICION_HIDE_THRESHOLD` | `3` | 未検証でフラグの重み合計がこれ以上の記録を既定表示から外す。`0` で無効 |
+| `MIN_TURNS_PER_LEVEL` | `0` | レベル 1 あたりに最低限かかるはずの実ターン数。`0` で無効。既存記録の分布を見てから決める |
 
 本番では Cloudflare を前段に置き、オリジンの Caddy / nginx で TLS を終端する構成を想定している。
 手順は [deploy/cloudflare.md](deploy/cloudflare.md) を参照。`TRUST_PROXY=1` と `CLIENT_IP_HEADER=CF-Connecting-IP` を忘れると全員が同じ IP に見えてレート制限で締め出される。
@@ -66,8 +68,25 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 - `submission_id` が無くても、添付を除いた内容が完全に一致する送信は同一と見なす。
 
 - `points` はサーバが `calc_score()` と同じ式で再計算した値。再計算に必要な項目 (`score.options`, `progress.max_max_experience`) が無い場合は申告値を使う。
-- `flags` は妥当性チェックの結果。拒否はせず、怪しい記録に印を付けて保存する
-  (`score_mismatch`, `level_out_of_range`, `exp_exceeds_max`, `depth_exceeds_max`, `zero_turns`, `not_dead`, `legacy_format`, `score_not_recomputable`)。
+- `flags` は妥当性チェックの結果。拒否はせず、怪しい記録に印を付けて保存する。
+- `suspicion` はフラグの重み付け合計。未検証でこれが `SUSPICION_HIDE_THRESHOLD` (既定 3) 以上の記録は、
+  既定のランキング表示から外れる (`include_flagged=1` で表示、管理者が検証済みにすれば常に表示)。
+
+| フラグ | 重み | 意味 |
+|---|---|---|
+| `level_exp_mismatch` | 3 | 経験値から導かれるレベル (種族・職業の係数込み) と申告レベルが一致しない |
+| `level_out_of_range` / `level_exceeds_max_level` | 3 | レベルが 50 超、または最高レベルを超えている |
+| `exp_exceeds_max` / `depth_exceeds_max` | 3 | 現在値が最大値を超えている |
+| `depth_exceeds_dungeon_max` | 3 | ダンジョン定義の最深階を超えている |
+| `stat_out_of_range` | 3 | 能力値が内部表現の範囲外 |
+| `winner_flags_inconsistent` | 2 | `true_winner` なのに `total_winner` でない |
+| `zero_turns` | 2 | レベル 2 以上なのに実ターン 0 |
+| `level_too_fast` | 2 | レベルあたりの実ターンが `MIN_TURNS_PER_LEVEL` 未満 (既定では無効) |
+| `score_mismatch` | 1 | 申告スコアと再計算が一致しない (ランキングは再計算値) |
+| `unknown_race` / `unknown_class` | 1 | 種族・職業の名称がゲームの表に無い |
+| `unknown_version` | 1 | `game.version` がゲームの書式に合わない |
+| `not_dead` / `score_not_recomputable` | 1 | 未死亡、または再計算に必要な項目が無い |
+| `legacy_format` | 0 | 旧形式 (creature-status 単体) での送信 |
 
 スキーマ違反、不正な JSON、上限超過はそれぞれ 400 / 400 / 413。レート制限超過は 429。
 
@@ -85,6 +104,7 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 | `name=` | 名前の部分一致 |
 | `since=`, `until=` | 登録日時の範囲 (ISO 8601、`until` は未満) |
 | `flagged=1` | フラグ付きで未検証の記録のみ |
+| `include_flagged=1` | 疑わしさの閾値で隠している記録も含める |
 | `sort=points` (既定) / `sort=recent` | スコア順 / 登録日時の新しい順 |
 
 不正な値は無視される。実際に効いた条件は応答の `filter` に入る。
@@ -169,6 +189,15 @@ npm run backup -- /mnt/backup/score # 出力先を指定
 SQLite のオンラインバックアップ API を使うので、サーバを止めずに整合したコピーが取れる。
 `BACKUP_KEEP` (既定 14) 世代より古いものは削除する。復元はサーバを止めて `scores.sqlite` を差し替えるだけでよい
 (`scores.sqlite-wal`, `scores.sqlite-shm` があれば一緒に消す)。
+
+## ゲーム本体の定数表
+
+`src/data/game-tables.json` に、妥当性チェックに使う経験値表・種族と職業の経験値係数・ダンジョンの最深階・能力値の範囲を
+ゲーム本体のソースから抜き出して置いてある。本体側の表が変わったら再生成してコミットする。
+
+```sh
+npm run extract-game-tables -- /path/to/bakabakaband > src/data/game-tables.json
+```
 
 ## 旧 `scores.json` からの移行
 

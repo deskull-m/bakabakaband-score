@@ -56,7 +56,7 @@ test('GET /scores?flagged=1 lists only unverified flagged records', async () => 
     const srv = await startServer();
     try {
         const clean = envelope();
-        clean.score.points = 504500;
+        clean.score.points = 94500;
         const cleanRes = await postJson(srv.base, '/submit', clean);
         const flaggedA = envelope();
         flaggedA.character.basic.name = 'A';

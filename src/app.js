@@ -37,6 +37,7 @@ function parseFilter(q) {
     };
     return {
         flagged: q.flagged === '1',
+        includeFlagged: q.include_flagged === '1',
         race: str(q.race),
         class: str(q.class),
         winner: q.winner === '1',
@@ -63,7 +64,7 @@ function parsePositiveInt(value, fallback, max) {
  */
 function createApp(config) {
     const app = express();
-    const store = new ScoreStore(config.dbPath);
+    const store = new ScoreStore(config.dbPath, { suspicionHideThreshold: config.suspicionHideThreshold });
     const stats = newStats();
 
     app.disable('x-powered-by');
@@ -153,7 +154,7 @@ function createApp(config) {
             stats.rejected += 1;
             return res.status(400).json({ error: `invalid submission: ${result.error}` });
         }
-        const assessment = assessSubmission(result.submission, result.legacy);
+        const assessment = assessSubmission(result.submission, result.legacy, { minTurnsPerLevel: config.minTurnsPerLevel });
         const { id, rank, duplicate } = store.insert(result.submission, assessment);
         if (duplicate) {
             stats.duplicates += 1;
@@ -172,6 +173,7 @@ function createApp(config) {
             duplicate,
             points: assessment.pointsComputed !== null ? assessment.pointsComputed : result.submission.score.points,
             flags: assessment.flags,
+            suspicion: assessment.suspicion,
         });
     });
 

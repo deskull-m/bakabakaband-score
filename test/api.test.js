@@ -11,14 +11,14 @@ test('submit: accepts a valid envelope and recomputes the score', async () => {
         assert.equal(status, 200);
         assert.equal(body.success, true);
         assert.equal(body.rank, 1);
-        // mult 100 (all bonuses off): (500000 + 100*45) * 100 / 100
-        assert.equal(body.points, 504500);
+        // mult 100 (all bonuses off): (90000 + 100*45) * 100 / 100
+        assert.equal(body.points, 94500);
         assert.deepEqual(body.flags, ['score_mismatch']);
 
         const list = await (await fetch(srv.base + '/scores')).json();
         assert.equal(list.total, 1);
-        assert.equal(list.scores[0].points, 504500);
-        assert.equal(list.scores[0].points_claimed, 5045000);
+        assert.equal(list.scores[0].points, 94500);
+        assert.equal(list.scores[0].points_claimed, 945000);
         assert.equal(list.scores[0].name, 'テスト');
         assert.equal(list.scores[0].verified, false);
     } finally {
@@ -30,7 +30,7 @@ test('submit: claimed score matching the recomputation has no flags', async () =
     const srv = await startServer();
     try {
         const sub = envelope();
-        sub.score.points = 504500;
+        sub.score.points = 94500;
         const { body } = await postJson(srv.base, '/submit', sub);
         assert.deepEqual(body.flags, []);
     } finally {

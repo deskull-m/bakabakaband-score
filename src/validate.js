@@ -4,6 +4,7 @@ const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
 const schema = require('../schema/ScoreSubmission.schema.json');
 const { recomputeFromSubmission } = require('./score');
+const { checkPlausibility, suspicionOf } = require('./plausibility');
 
 const ajv = new Ajv({ allErrors: false, strict: false });
 addFormats(ajv);
@@ -76,9 +77,10 @@ function validateSubmission(body) {
 /*!
  * 妥当性チェック。拒否はせず、怪しい点を flags として列挙する。
  * 拒否すると送信者に境界を教えるだけなので、受け付けてから隔離する方針。
- * @returns {{ flags: string[], pointsComputed: number|null }}
+ * @param {Object} opts { minTurnsPerLevel }
+ * @returns {{ flags: string[], pointsComputed: number|null, suspicion: number }}
  */
-function assessSubmission(submission, legacy) {
+function assessSubmission(submission, legacy, opts = {}) {
     const flags = [];
     const c = submission.character;
     const basic = c.basic || {};
@@ -117,7 +119,9 @@ function assessSubmission(submission, legacy) {
         flags.push('score_mismatch');
     }
 
-    return { flags, pointsComputed };
+    checkPlausibility(flags, submission, opts);
+
+    return { flags, pointsComputed, suspicion: suspicionOf(flags) };
 }
 
 module.exports = { validateSubmission, assessSubmission, ENVELOPE_FORMAT, LEGACY_FORMAT };

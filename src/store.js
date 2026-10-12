@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const Database = require('better-sqlite3');
 const { contentHash } = require('./canonical');
+const { suspicionOf } = require('./plausibility');
 
 const ATTACHMENT_KINDS = ['character_dump', 'screen_dump'];
 
@@ -85,12 +86,23 @@ const MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS scores_version_idx ON scores (game_version) WHERE deleted_at IS NULL;
     CREATE INDEX IF NOT EXISTS scores_death_cause_idx ON scores (death_cause) WHERE deleted_at IS NULL;
     `,
+    // 7: フラグの重み付け合計 (#8)
+    `
+    ALTER TABLE scores ADD COLUMN suspicion INTEGER NOT NULL DEFAULT 0;
+    `,
 ];
 
 /*!
  * スキーマ変更に伴うデータ移行。キーはマイグレーション番号 (適用後の user_version)。
  */
 const DATA_MIGRATIONS = {
+    // 既存の flags から suspicion を計算する
+    7(db) {
+        const update = db.prepare('UPDATE scores SET suspicion = ? WHERE id = ?');
+        for (const row of db.prepare('SELECT id, flags FROM scores').all()) {
+            update.run(suspicionOf(JSON.parse(row.flags)), row.id);
+        }
+    },
     // scores.submission に埋め込まれていた添付を attachments テーブルへ移す
     4(db) {
         const rows = db.prepare('SELECT id, submission FROM scores').all();
@@ -116,7 +128,7 @@ const SUMMARY_COLUMNS = `
     id, created_at, name, race, class, sex, personality, level, max_level,
     depth, max_depth, gold, turns, play_time_sec, points, points_claimed,
     points_computed, death_cause, is_winner, game_version, platform, verified, flags,
-    submission_id, deleted_at
+    submission_id, deleted_at, suspicion
 `;
 const LIVE = 'deleted_at IS NULL';
 
@@ -132,7 +144,12 @@ function rowToSummary(row) {
 }
 
 class ScoreStore {
-    constructor(dbPath) {
+    /*!
+     * @param dbPath SQLite ファイル。':memory:' でインメモリ
+     * @param opts.suspicionHideThreshold 未検証でこの点数以上の記録を既定表示から外す (0 で無効)
+     */
+    constructor(dbPath, opts = {}) {
+        this.hideThreshold = opts.suspicionHideThreshold || 0;
         if (dbPath !== ':memory:') {
             fs.mkdirSync(path.dirname(dbPath), { recursive: true });
         }
@@ -146,18 +163,18 @@ class ScoreStore {
                 id, created_at, name, race, class, sex, personality, level, max_level,
                 depth, max_depth, gold, turns, play_time_sec, points_claimed, points_computed,
                 points, death_cause, is_winner, game_version, platform, verified, flags, submission,
-                submission_id, content_hash
+                submission_id, content_hash, suspicion
             ) VALUES (
                 @id, @created_at, @name, @race, @class, @sex, @personality, @level, @max_level,
                 @depth, @max_depth, @gold, @turns, @play_time_sec, @points_claimed, @points_computed,
                 @points, @death_cause, @is_winner, @game_version, @platform, @verified, @flags, @submission,
-                @submission_id, @content_hash
+                @submission_id, @content_hash, @suspicion
             )`);
         // 重複判定は削除済みの記録も含める (管理者が消した記録の再送を通さない)
         this.findDuplicateStmt = this.db.prepare(
             'SELECT id, points, created_at, deleted_at FROM scores WHERE (submission_id IS NOT NULL AND submission_id = ?) OR content_hash = ? LIMIT 1');
         this.rankStmt = this.db.prepare(
-            `SELECT COUNT(*) + 1 AS rank FROM scores WHERE ${LIVE} AND (points > ? OR (points = ? AND created_at < ?))`);
+            `SELECT COUNT(*) + 1 AS rank FROM scores WHERE ${LIVE} AND ${this.visibleClause()} AND (points > ? OR (points = ? AND created_at < ?))`);
         // 日次上限は削除済みも数える (削除で枠が空かないように)
         this.countSinceStmt = this.db.prepare('SELECT COUNT(*) AS n FROM scores WHERE created_at >= ?');
         this.getStmt = this.db.prepare(`SELECT ${SUMMARY_COLUMNS}, submission FROM scores WHERE id = ?`);
@@ -192,7 +209,14 @@ class ScoreStore {
      * submission_id または内容ハッシュが既存の記録と一致する場合は登録せず、既存の記録を返す。
      * @returns {{ id: string, rank: number, duplicate: boolean }}
      */
-    insert(submission, { flags, pointsComputed }) {
+    /*!
+     * 既定表示に含める記録の条件。検証済みは常に含める。
+     */
+    visibleClause() {
+        return this.hideThreshold > 0 ? `(verified = 1 OR suspicion < ${this.hideThreshold})` : '1';
+    }
+
+    insert(submission, { flags, pointsComputed, suspicion }) {
         const c = submission.character;
         const basic = c.basic || {};
         const status = c.status || {};
@@ -226,6 +250,7 @@ class ScoreStore {
             platform: game.platform || null,
             verified: 0,
             flags: JSON.stringify(flags),
+            suspicion: suspicion ?? suspicionOf(flags),
             submission: JSON.stringify(stored),
             submission_id: submission.submission_id || null,
             content_hash: contentHash(submission),
@@ -256,11 +281,13 @@ class ScoreStore {
      * 絞り込み条件から WHERE 句とパラメータを組み立てる。
      * @param {Object} f  { flagged, race, class, winner, version, since, until, name }
      */
-    static buildFilter(f = {}) {
+    buildFilter(f = {}) {
         const where = [LIVE];
         const params = [];
         if (f.flagged) {
             where.push('verified = 0 AND flags != \'[]\'');
+        } else if (!f.includeFlagged) {
+            where.push(this.visibleClause());
         }
         if (f.race) {
             where.push('race = ?');
@@ -296,14 +323,14 @@ class ScoreStore {
      * @param {Object} opts { limit, offset, sort: 'points'|'recent', ...絞り込み }
      */
     list({ limit, offset, sort = 'points', ...filter }) {
-        const { where, params } = ScoreStore.buildFilter(filter);
+        const { where, params } = this.buildFilter(filter);
         const order = sort === 'recent' ? 'created_at DESC' : 'points DESC, created_at ASC';
         return this.db.prepare(`SELECT ${SUMMARY_COLUMNS} FROM scores WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
             .all(...params, limit, offset).map(rowToSummary);
     }
 
     count(filter = {}) {
-        const { where, params } = ScoreStore.buildFilter(filter);
+        const { where, params } = this.buildFilter(filter);
         return this.db.prepare(`SELECT COUNT(*) AS n FROM scores WHERE ${where}`).get(...params).n;
     }
 

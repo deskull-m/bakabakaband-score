@@ -3,10 +3,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startServer, envelope, postJson } = require('./helpers');
+const { levelForExp, tables } = require('../src/plausibility');
+
+// 種族・職業ごとに経験値係数が違うので、レベルを経験値から導いて妥当な記録にする
+function consistentLevel(exp, raceTitle, classTitle) {
+    const race = tables.races.find((r) => r.ja === raceTitle);
+    const cls = tables.classes.find((c) => c.ja === classTitle);
+    return levelForExp(exp, race, cls);
+}
 
 async function seed(srv) {
     const rows = [
-        { name: 'ElfMage', race: 'エルフ', cls: '魔法使い', exp: 1000, winner: false, version: '1.0.0', cause: 'オーク' },
+        { name: 'ElfMage', race: 'エルフ', cls: 'メイジ', exp: 1000, winner: false, version: '1.0.0', cause: 'オーク' },
         { name: 'HobWar', race: 'ホビット', cls: '戦士', exp: 3000, winner: false, version: '1.0.0', cause: 'モルゴス' },
         { name: 'ElfWar', race: 'エルフ', cls: '戦士', exp: 2000, winner: true, version: '1.1.0', cause: 'ripe' },
         { name: 'Dwarf_x', race: 'ドワーフ', cls: '戦士', exp: 500, winner: false, version: '1.1.0', cause: 'モルゴス' },
@@ -17,8 +25,13 @@ async function seed(srv) {
         sub.character.basic.name = r.name;
         sub.character.basic.race = r.race;
         sub.character.basic.class = r.cls;
-        sub.progress.max_max_experience = r.exp;
+        sub.character.basic.experience = r.exp * 100;
+        sub.character.basic.max_experience = r.exp * 100;
+        sub.character.basic.level = consistentLevel(r.exp * 100, r.race, r.cls);
+        sub.progress.max_level = sub.character.basic.level;
+        sub.progress.max_max_experience = r.exp * 100;
         sub.progress.true_winner = r.winner;
+        sub.progress.total_winner = r.winner;
         sub.game.version = r.version;
         sub.character.death.cause = r.cause;
         ids[r.name] = (await postJson(srv.base, '/submit', sub)).body.id;
