@@ -152,11 +152,12 @@ function createApp(config) {
     app.get('/scores', readCors, (req, res) => {
         const limit = parsePositiveInt(req.query.limit, 100, config.maxPageSize) || config.maxPageSize;
         const offset = parsePositiveInt(req.query.offset, 0, Number.MAX_SAFE_INTEGER);
+        const flagged = req.query.flagged === '1';
         res.json({
-            total: store.count(),
+            total: store.count({ flagged }),
             limit,
             offset,
-            scores: store.list({ limit, offset }),
+            scores: store.list({ limit, offset, flagged }),
         });
     });
 
@@ -182,19 +183,45 @@ function createApp(config) {
     });
 
     // --- 管理操作 -----------------------------------------------------------
+    // 監査ログには誰が操作したかの代わりに、要求に付けられた理由 (X-Admin-Reason) を残す
+    const reasonOf = (req) => (req.get('x-admin-reason') || '').slice(0, 200) || null;
+
     app.delete('/scores/:id', adminAuth, (req, res) => {
-        if (!store.delete(req.params.id)) {
+        const purge = req.query.purge === '1';
+        const ok = purge ? store.purge(req.params.id, reasonOf(req)) : store.delete(req.params.id, reasonOf(req));
+        if (!ok) {
             return res.status(404).json({ error: 'score not found' });
+        }
+        return res.json({ success: true, purged: purge });
+    });
+
+    app.post('/scores/:id/restore', adminAuth, (req, res) => {
+        if (!store.restore(req.params.id, reasonOf(req))) {
+            return res.status(404).json({ error: 'score not found or not deleted' });
         }
         return res.json({ success: true });
     });
 
     app.post('/scores/:id/verify', adminAuth, express.json({ limit: '1kb' }), (req, res) => {
         const verified = req.body && req.body.verified !== false;
-        if (!store.setVerified(req.params.id, verified)) {
+        if (!store.setVerified(req.params.id, verified, reasonOf(req))) {
             return res.status(404).json({ error: 'score not found' });
         }
         return res.json({ success: true, verified });
+    });
+
+    app.get('/admin/scores/:id', adminAuth, (req, res) => {
+        const entry = store.get(req.params.id, { includeDeleted: true });
+        if (!entry) {
+            return res.status(404).json({ error: 'score not found' });
+        }
+        return res.json(entry);
+    });
+
+    app.get('/admin/log', adminAuth, (req, res) => {
+        const limit = parsePositiveInt(req.query.limit, 100, config.maxPageSize) || config.maxPageSize;
+        const offset = parsePositiveInt(req.query.offset, 0, Number.MAX_SAFE_INTEGER);
+        return res.json({ limit, offset, log: store.listLog({ limit, offset }) });
     });
 
     // --- エラー処理 ---------------------------------------------------------

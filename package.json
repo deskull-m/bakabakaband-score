@@ -8,7 +8,8 @@
     "test": "node --test \"test/**/*.test.js\"",
     "lint": "eslint .",
     "import-legacy": "node scripts/import-legacy.js",
-    "backup": "node scripts/backup.js"
+    "backup": "node scripts/backup.js",
+    "admin": "node scripts/admin.js"
   },
   "keywords": [
     "bakabakaband",

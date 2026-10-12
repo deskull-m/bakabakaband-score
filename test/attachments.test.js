@@ -46,11 +46,15 @@ test('attachments: stored separately, listed with size, served as text/plain wit
     }
 });
 
-test('attachments: deleted together with the score', async () => {
+test('attachments: hidden on soft delete, removed on purge', async () => {
     const srv = await startServer();
     try {
         const { body } = await postJson(srv.base, '/submit', envelope({ attachments: { character_dump: 'x' } }));
-        await fetch(`${srv.base}/scores/${body.id}`, { method: 'DELETE', headers: { Authorization: 'Bearer test-admin-token' } });
+        const headers = { Authorization: 'Bearer test-admin-token' };
+        await fetch(`${srv.base}/scores/${body.id}`, { method: 'DELETE', headers });
+        assert.equal((await fetch(`${srv.base}/scores/${body.id}/attachments/character_dump`)).status, 404);
+        assert.equal(srv.store.db.prepare('SELECT COUNT(*) AS n FROM attachments').get().n, 1);
+        await fetch(`${srv.base}/scores/${body.id}?purge=1`, { method: 'DELETE', headers });
         assert.equal(srv.store.db.prepare('SELECT COUNT(*) AS n FROM attachments').get().n, 0);
     } finally {
         await srv.close();

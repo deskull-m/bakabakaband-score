@@ -90,10 +90,32 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 ランキングの HTML ページ。サーバは HTML を文字列連結せず、ブラウザ側で DOM API のみで描画する。
 スクリーンショット (HTML) はスクリプト実行不可の sandbox iframe に閉じ込めて表示する。
 
+### `GET /scores?flagged=1`
+
+フラグ付きで未検証の記録だけを登録日時の新しい順に返す。管理者が確認する対象の一覧。
+
 ### 管理操作 (`Authorization: Bearer <ADMIN_TOKEN>`)
 
-- `DELETE /scores/:id` — 記録を削除
+- `DELETE /scores/:id` — 論理削除。公開 API から見えなくなるが行と添付は残り、同じ内容の再送も通らない
+- `DELETE /scores/:id?purge=1` — 物理削除。添付も消え、再送が通るようになる
+- `POST /scores/:id/restore` — 論理削除を取り消す
 - `POST /scores/:id/verify` `{ "verified": true|false }` — 人手で確認した記録に「検証済」を付ける
+- `GET /admin/scores/:id` — 論理削除済みも含めて詳細を返す
+- `GET /admin/log` — 管理操作の監査ログ (日時、操作、記録 ID、理由)
+
+管理操作の要求に `X-Admin-Reason: <理由>` を付けると監査ログに残る。
+
+### 管理 CLI
+
+```sh
+export SCORE_SERVER_URL=https://score.example.net ADMIN_TOKEN=...
+npm run admin -- list-flagged          # 要確認の記録を一覧
+npm run admin -- show <id>
+npm run admin -- verify <id> "ダンプを確認した"
+npm run admin -- delete <id> "改竄の疑い"   # 論理削除 (restore で戻せる)
+npm run admin -- purge <id>            # 物理削除
+npm run admin -- log
+```
 
 ### `GET /healthz`
 

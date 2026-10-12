@@ -65,6 +65,18 @@ const MIGRATIONS = [
         PRIMARY KEY (score_id, kind)
     );
     `,
+    // 5: 論理削除と管理操作の監査ログ (#10)
+    `
+    ALTER TABLE scores ADD COLUMN deleted_at TEXT;
+    CREATE INDEX IF NOT EXISTS scores_live_points_idx ON scores (points DESC, created_at ASC) WHERE deleted_at IS NULL;
+    CREATE TABLE IF NOT EXISTS admin_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        at          TEXT NOT NULL,
+        action      TEXT NOT NULL,
+        score_id    TEXT,
+        detail      TEXT
+    );
+    `,
 ];
 
 /*!
@@ -96,8 +108,9 @@ const SUMMARY_COLUMNS = `
     id, created_at, name, race, class, sex, personality, level, max_level,
     depth, max_depth, gold, turns, play_time_sec, points, points_claimed,
     points_computed, death_cause, is_winner, game_version, platform, verified, flags,
-    submission_id
+    submission_id, deleted_at
 `;
+const LIVE = 'deleted_at IS NULL';
 
 function rowToSummary(row) {
     if (!row) {
@@ -132,21 +145,31 @@ class ScoreStore {
                 @points, @death_cause, @is_winner, @game_version, @platform, @verified, @flags, @submission,
                 @submission_id, @content_hash
             )`);
+        // 重複判定は削除済みの記録も含める (管理者が消した記録の再送を通さない)
         this.findDuplicateStmt = this.db.prepare(
-            'SELECT id, points, created_at FROM scores WHERE (submission_id IS NOT NULL AND submission_id = ?) OR content_hash = ? LIMIT 1');
+            'SELECT id, points, created_at, deleted_at FROM scores WHERE (submission_id IS NOT NULL AND submission_id = ?) OR content_hash = ? LIMIT 1');
         this.rankStmt = this.db.prepare(
-            'SELECT COUNT(*) + 1 AS rank FROM scores WHERE points > ? OR (points = ? AND created_at < ?)');
+            `SELECT COUNT(*) + 1 AS rank FROM scores WHERE ${LIVE} AND (points > ? OR (points = ? AND created_at < ?))`);
         this.listStmt = this.db.prepare(
-            `SELECT ${SUMMARY_COLUMNS} FROM scores ORDER BY points DESC, created_at ASC LIMIT ? OFFSET ?`);
-        this.countStmt = this.db.prepare('SELECT COUNT(*) AS n FROM scores');
+            `SELECT ${SUMMARY_COLUMNS} FROM scores WHERE ${LIVE} ORDER BY points DESC, created_at ASC LIMIT ? OFFSET ?`);
+        this.listFlaggedStmt = this.db.prepare(
+            `SELECT ${SUMMARY_COLUMNS} FROM scores WHERE ${LIVE} AND verified = 0 AND flags != '[]' ORDER BY created_at DESC LIMIT ? OFFSET ?`);
+        this.countStmt = this.db.prepare(`SELECT COUNT(*) AS n FROM scores WHERE ${LIVE}`);
+        this.countFlaggedStmt = this.db.prepare(`SELECT COUNT(*) AS n FROM scores WHERE ${LIVE} AND verified = 0 AND flags != '[]'`);
+        // 日次上限は削除済みも数える (削除で枠が空かないように)
         this.countSinceStmt = this.db.prepare('SELECT COUNT(*) AS n FROM scores WHERE created_at >= ?');
         this.getStmt = this.db.prepare(`SELECT ${SUMMARY_COLUMNS}, submission FROM scores WHERE id = ?`);
-        this.deleteStmt = this.db.prepare('DELETE FROM scores WHERE id = ?');
-        this.verifyStmt = this.db.prepare('UPDATE scores SET verified = ? WHERE id = ?');
+        this.softDeleteStmt = this.db.prepare(`UPDATE scores SET deleted_at = ? WHERE id = ? AND ${LIVE}`);
+        this.restoreStmt = this.db.prepare('UPDATE scores SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL');
+        this.purgeStmt = this.db.prepare('DELETE FROM scores WHERE id = ?');
+        this.verifyStmt = this.db.prepare(`UPDATE scores SET verified = ? WHERE id = ? AND ${LIVE}`);
+        this.logStmt = this.db.prepare('INSERT INTO admin_log (at, action, score_id, detail) VALUES (?, ?, ?, ?)');
+        this.listLogStmt = this.db.prepare('SELECT id, at, action, score_id, detail FROM admin_log ORDER BY id DESC LIMIT ? OFFSET ?');
         this.insertAttachmentStmt = this.db.prepare(
             'INSERT INTO attachments (score_id, kind, size, body_gz) VALUES (?, ?, ?, ?)');
         this.listAttachmentsStmt = this.db.prepare('SELECT kind, size FROM attachments WHERE score_id = ?');
-        this.getAttachmentStmt = this.db.prepare('SELECT size, body_gz FROM attachments WHERE score_id = ? AND kind = ?');
+        this.getAttachmentStmt = this.db.prepare(
+            `SELECT a.size, a.body_gz FROM attachments a JOIN scores s ON s.id = a.score_id WHERE s.${LIVE} AND a.score_id = ? AND a.kind = ?`);
     }
 
     migrate() {
@@ -209,7 +232,9 @@ class ScoreStore {
         const tx = this.db.transaction(() => {
             const existing = this.findDuplicateStmt.get(row.submission_id, row.content_hash);
             if (existing) {
-                const rank = this.rankStmt.get(existing.points, existing.points, existing.created_at).rank;
+                const rank = existing.deleted_at
+                    ? null
+                    : this.rankStmt.get(existing.points, existing.points, existing.created_at).rank;
                 return { id: existing.id, rank, duplicate: true };
             }
             this.insertStmt.run(row);
@@ -225,21 +250,26 @@ class ScoreStore {
         return tx();
     }
 
-    list({ limit, offset }) {
-        return this.listStmt.all(limit, offset).map(rowToSummary);
+    list({ limit, offset, flagged = false }) {
+        const stmt = flagged ? this.listFlaggedStmt : this.listStmt;
+        return stmt.all(limit, offset).map(rowToSummary);
     }
 
-    count() {
-        return this.countStmt.get().n;
+    count({ flagged = false } = {}) {
+        return (flagged ? this.countFlaggedStmt : this.countStmt).get().n;
     }
 
     countSince(isoTimestamp) {
         return this.countSinceStmt.get(isoTimestamp).n;
     }
 
-    get(id) {
+    /*!
+     * @param id 記録 ID
+     * @param includeDeleted 論理削除済みも返す (管理用)
+     */
+    get(id, { includeDeleted = false } = {}) {
         const row = this.getStmt.get(id);
-        if (!row) {
+        if (!row || (row.deleted_at && !includeDeleted)) {
             return null;
         }
         const summary = rowToSummary(row);
@@ -266,12 +296,50 @@ class ScoreStore {
         return { size: row.size, body: zlib.gunzipSync(row.body_gz).toString('utf8') };
     }
 
-    delete(id) {
-        return this.deleteStmt.run(id).changes > 0;
+    /*!
+     * 論理削除。公開 API からは見えなくなるが行と添付は残り、restore で戻せる。
+     */
+    delete(id, detail = null) {
+        const ok = this.softDeleteStmt.run(new Date().toISOString(), id).changes > 0;
+        if (ok) {
+            this.log('delete', id, detail);
+        }
+        return ok;
     }
 
-    setVerified(id, verified) {
-        return this.verifyStmt.run(verified ? 1 : 0, id).changes > 0;
+    restore(id, detail = null) {
+        const ok = this.restoreStmt.run(id).changes > 0;
+        if (ok) {
+            this.log('restore', id, detail);
+        }
+        return ok;
+    }
+
+    /*!
+     * 物理削除。添付も外部キーで消える。重複判定からも外れるので再送が通るようになる。
+     */
+    purge(id, detail = null) {
+        const ok = this.purgeStmt.run(id).changes > 0;
+        if (ok) {
+            this.log('purge', id, detail);
+        }
+        return ok;
+    }
+
+    setVerified(id, verified, detail = null) {
+        const ok = this.verifyStmt.run(verified ? 1 : 0, id).changes > 0;
+        if (ok) {
+            this.log(verified ? 'verify' : 'unverify', id, detail);
+        }
+        return ok;
+    }
+
+    log(action, scoreId, detail) {
+        this.logStmt.run(new Date().toISOString(), action, scoreId, detail || null);
+    }
+
+    listLog({ limit, offset }) {
+        return this.listLogStmt.all(limit, offset);
     }
 
     close() {
