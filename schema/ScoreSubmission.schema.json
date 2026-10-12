@@ -39,13 +39,15 @@
           "type": "string",
           "enum": [
             "win",
+            "unix",
             "x11",
             "gcu",
             "cap",
             "godot",
             "headless",
             "other"
-          ]
+          ],
+          "description": "ビルド/フロントエンドの種別。UNIX 系はフロントエンドを実行時に選ぶので unix とする"
         },
         "locale": {
           "type": "string",

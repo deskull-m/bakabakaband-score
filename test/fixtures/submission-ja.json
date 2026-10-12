@@ -1,0 +1,157 @@
+{
+  "format": "bakabakaband-score-submission",
+  "format_version": 1,
+  "submission_id": "7d1f3c2a-5b7e-4c1d-9a2b-0f6e8d4c3b2a",
+  "game": {
+    "version": "馬鹿馬鹿蛮怒 0.0.2.0(開発版)",
+    "platform": "unix",
+    "locale": "ja"
+  },
+  "score": {
+    "points": 0,
+    "multiplier": 130,
+    "options": {
+      "preserve_mode": true,
+      "autoroller": true,
+      "smart_learn": false,
+      "smart_cheat": false,
+      "ironman_shops": false,
+      "ironman_smallest_floor": false,
+      "ironman_force_arena_floor": false,
+      "powerup_home": false,
+      "ironman_rooms": false,
+      "ironman_nightmare": false,
+      "ironman_downward": false
+    },
+    "arena_wins": 3,
+    "spectre_berserker": false,
+    "munchkin": false
+  },
+  "progress": {
+    "max_level": 32,
+    "max_max_experience": 262000,
+    "real_turns": 184233,
+    "play_time_sec": 25311,
+    "max_depth_overall": 41,
+    "max_depth": {
+      "ANGBAND": 41,
+      "YEEK_CAVE": 13,
+      "ORC_CAVE": 20
+    },
+    "death_count": 0,
+    "total_winner": false,
+    "true_winner": false
+  },
+  "character": {
+    "version": {
+      "format": "bakabakaband-creature-status",
+      "version": 1
+    },
+    "basic": {
+      "name": "ガラドリエル",
+      "level": 32,
+      "experience": 262000,
+      "max_experience": 262000,
+      "age": 110,
+      "height": 180,
+      "weight": 70,
+      "prestige": 45,
+      "race": "エルフ",
+      "class": "メイジ",
+      "sex": "女性",
+      "personality": "きれもの",
+      "realm1": "生命",
+      "realm2": "仙術"
+    },
+    "stats": [
+      {
+        "name": "STR",
+        "current": 120,
+        "max": 120,
+        "use": 120,
+        "top": 120
+      },
+      {
+        "name": "INT",
+        "current": 1100,
+        "max": 1100,
+        "use": 1200,
+        "top": 1100
+      },
+      {
+        "name": "WIS",
+        "current": 400,
+        "max": 400,
+        "use": 400,
+        "top": 400
+      },
+      {
+        "name": "DEX",
+        "current": 300,
+        "max": 300,
+        "use": 300,
+        "top": 300
+      },
+      {
+        "name": "CON",
+        "current": 250,
+        "max": 250,
+        "use": 250,
+        "top": 250
+      },
+      {
+        "name": "CHR",
+        "current": 500,
+        "max": 500,
+        "use": 500,
+        "top": 500
+      }
+    ],
+    "status": {
+      "hitpoints": -12,
+      "max_hitpoints": 210,
+      "mana": 30,
+      "max_mana": 180,
+      "armor_class": 40,
+      "display_armor_class": 85,
+      "gold": 48210,
+      "dungeon_level": 41,
+      "max_dungeon_level": 41,
+      "game_turn": 1842330
+    },
+    "combat": {
+      "base_to_hit": 10,
+      "melee_to_hit": 12,
+      "melee_to_damage": 8,
+      "ranged_to_hit": 10,
+      "num_blow": 2,
+      "num_fire": 100
+    },
+    "skills": {
+      "fighting": 40,
+      "shooting": 45,
+      "saving_throw": 80,
+      "stealth": 5,
+      "perception": 20,
+      "searching": 15,
+      "disarming": 60,
+      "magic_device": 90,
+      "infravision": 3,
+      "speed": 5
+    },
+    "death": {
+      "is_dead": true,
+      "cause": "ドラゴンの巣のアンバーの王子",
+      "killer_id": 1023,
+      "last_message": "まだ終わらんよ"
+    },
+    "history": [
+      "あなたはエルフの旧家の生まれである。",
+      "魔術師の見習いとして育った。"
+    ]
+  },
+  "attachments": {
+    "character_dump": "  [馬鹿馬鹿蛮怒 0.0.2.0 キャラクタ情報]\n\n 名前  : ガラドリエル\n 種族  : エルフ\n",
+    "screen_dump": "<html>\n<body text=\"#ffffff\" bgcolor=\"#000000\">\n<pre>\n<font color=\"#ffffff\">@..#</font>\n</pre>\n</body>\n</html>\n"
+  }
+}

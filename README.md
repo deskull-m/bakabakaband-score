@@ -61,7 +61,19 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 }
 ```
 
-応答は HTTP 200 で `{ success, id, rank, points, flags, duplicate }`。ゲーム側は 200 のみを成功として扱う。
+応答は HTTP 200 で `{ success, id, rank, points, flags, suspicion, duplicate }`。ゲーム側は 200 のみを成功として扱う。
+
+ゲーム側の実装は本体リポジトリの `src/io/score-submission.cpp` (組み立て) と `src/io/report.cpp` (送信)。
+本体が実際に出力する形の例を `test/fixtures/submission-ja.json` に置き、スキーマ検証・スコア再計算・レベル整合の回帰テストにしている。
+
+### `format_version` の互換方針
+
+- サーバは `format_version` が自分の知っている範囲 (現在は 1) の送信だけ受理し、それ以外は 400 で拒否する
+- **後方互換のある変更** (任意フィールドの追加、enum 値の追加) は `format_version` を上げない。
+  スキーマの `additionalProperties: true` のセクション (`game`, `score`, `progress`, `character.*`) に足す
+- **互換の無い変更** (必須フィールドの追加、意味や単位の変更、フィールドの削除) は `format_version` を上げ、
+  サーバは新旧両方を一定期間受理する。古いバージョンの受理をやめるときは README とランキングページに告知する
+- スキーマ本体 (`schema/ScoreSubmission.schema.json`) は本体リポジトリの `schema/` にも同じものを置き、両方を同時に更新する
 
 - `submission_id` (UUID、任意) を送ると、同じ値での再送は登録せず既存の記録を `duplicate: true` で返す。
   クライアントは送信内容を組み立てた時点で生成し、再送時も同じ値を使うこと。
