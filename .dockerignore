@@ -1,0 +1,8 @@
+node_modules
+data
+*.sqlite*
+scores.json
+.git
+test
+.github
+deploy

@@ -1,0 +1,19 @@
+# docker compose -f deploy/compose.yaml up -d
+# ADMIN_TOKEN は .env か環境変数で渡す
+services:
+  score:
+    build: ..
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
+      TRUST_PROXY: "1"
+      CLIENT_IP_HEADER: CF-Connecting-IP
+      SUBMIT_DAILY_MAX: "500"
+      MIN_FREE_DISK_MB: "1024"
+    volumes:
+      - score-data:/data
+
+volumes:
+  score-data:

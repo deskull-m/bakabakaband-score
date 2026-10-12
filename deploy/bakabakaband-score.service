@@ -1,0 +1,35 @@
+# systemd unit の例。/etc/systemd/system/bakabakaband-score.service に置く。
+#
+#   useradd --system --home /srv/bakabakaband-score --shell /usr/sbin/nologin bbscore
+#   git clone https://github.com/deskull-m/bakabakaband-score /srv/bakabakaband-score
+#   cd /srv/bakabakaband-score && npm ci --omit=dev
+#   cp deploy/bakabakaband-score.env.example /etc/bakabakaband-score.env   # ADMIN_TOKEN を書き換える
+#   chown root:bbscore /etc/bakabakaband-score.env && chmod 640 /etc/bakabakaband-score.env
+#   systemctl enable --now bakabakaband-score
+
+[Unit]
+Description=Bakabakaband Score Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bbscore
+Group=bbscore
+WorkingDirectory=/srv/bakabakaband-score
+EnvironmentFile=/etc/bakabakaband-score.env
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=5
+
+# 書き込み先をデータディレクトリだけに限定する
+StateDirectory=bakabakaband-score
+Environment=DATA_DIR=/var/lib/bakabakaband-score
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/bakabakaband-score
+
+[Install]
+WantedBy=multi-user.target

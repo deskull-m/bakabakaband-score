@@ -7,7 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const { ScoreStore } = require('./store');
 const { validateSubmission, assessSubmission } = require('./validate');
-const { makeLimiter, makeCapacityGuard, makeProxyWarning, newStats } = require('./guard');
+const { makeLimiter, makeCapacityGuard, makeProxyWarning, newStats, freeDiskMb, startOfUtcDay } = require('./guard');
 
 /*!
  * 管理トークンを定数時間で比較する。
@@ -89,6 +89,26 @@ function createApp(config) {
             }
         });
         next();
+    });
+
+    // --- 死活監視 -----------------------------------------------------------
+    // 監視系から高頻度で叩かれるのでレート制限の手前に置く
+    const startedAt = Date.now();
+    app.get('/healthz', (req, res) => {
+        let total;
+        try {
+            total = store.count();
+        } catch (err) {
+            return res.status(503).json({ ok: false, error: 'database unavailable' });
+        }
+        res.set('Cache-Control', 'no-store');
+        return res.json({
+            ok: true,
+            uptime_sec: Math.floor((Date.now() - startedAt) / 1000),
+            total,
+            free_disk_mb: freeDiskMb(config.dbPath),
+            submissions_today: store.countSince(startOfUtcDay()),
+        });
     });
 
     // --- 静的ページ ---------------------------------------------------------

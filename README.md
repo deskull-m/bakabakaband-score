@@ -89,6 +89,34 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 - `DELETE /scores/:id` — 記録を削除
 - `POST /scores/:id/verify` `{ "verified": true|false }` — 人手で確認した記録に「検証済」を付ける
 
+### `GET /healthz`
+
+死活監視用。`{ ok, uptime_sec, total, free_disk_mb, submissions_today }` を返す。レート制限の対象外。
+
+## デプロイ
+
+`deploy/` に構成例がある。
+
+| ファイル | 内容 |
+|---|---|
+| `deploy/cloudflare.md` | Cloudflare を前段に置く手順 (DNS, TLS, オリジン遮断, WAF, キャッシュ) |
+| `deploy/Caddyfile` | オリジン側の Caddy 設定。Origin CA 証明書で TLS 終端し、ログからクライアント IP を落とす |
+| `deploy/bakabakaband-score.service` | systemd unit。書き込み先を `/var/lib/bakabakaband-score` に限定 |
+| `deploy/bakabakaband-score.env.example` | 環境変数ファイルの雛形 |
+| `deploy/bakabakaband-score-backup.{service,timer}` | 日次バックアップの systemd timer |
+| `Dockerfile`, `deploy/compose.yaml` | コンテナで動かす場合 |
+
+### バックアップ
+
+```sh
+npm run backup                      # <DATA_DIR>/backups/scores-<日時>.sqlite に書き出す
+npm run backup -- /mnt/backup/score # 出力先を指定
+```
+
+SQLite のオンラインバックアップ API を使うので、サーバを止めずに整合したコピーが取れる。
+`BACKUP_KEEP` (既定 14) 世代より古いものは削除する。復元はサーバを止めて `scores.sqlite` を差し替えるだけでよい
+(`scores.sqlite-wal`, `scores.sqlite-shm` があれば一緒に消す)。
+
 ## 旧 `scores.json` からの移行
 
 ```sh

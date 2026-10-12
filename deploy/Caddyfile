@@ -1,0 +1,34 @@
+# オリジン側の Caddy 設定例。Cloudflare を前段に置く構成 (deploy/cloudflare.md) を想定。
+#
+# - TLS は Cloudflare Origin CA 証明書で終端する (/etc/caddy/origin.pem, origin.key)
+# - 443 は Cloudflare の IP レンジからのみ受けるようファイアウォールで塞ぐこと
+# - アプリ側は TRUST_PROXY=1, CLIENT_IP_HEADER=CF-Connecting-IP を設定する
+
+score.example.net {
+    tls /etc/caddy/origin.pem /etc/caddy/origin.key
+
+    encode zstd gzip
+
+    # 送信ボディはアプリ側でも制限しているが、手前でも切っておく
+    request_body {
+        max_size 1MB
+    }
+
+    reverse_proxy 127.0.0.1:3000 {
+        header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+    }
+
+    log {
+        output file /var/log/caddy/score.log {
+            roll_size 50MiB
+            roll_keep 5
+        }
+        # クライアント IP をログに残さない (README「セキュリティ方針」)
+        format filter {
+            request>remote_ip delete
+            request>client_ip delete
+            request>headers>Cf-Connecting-Ip delete
+            request>headers>X-Forwarded-For delete
+        }
+    }
+}

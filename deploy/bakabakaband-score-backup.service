@@ -1,0 +1,14 @@
+# 日次バックアップ。timer と一緒に /etc/systemd/system/ に置く。
+#   systemctl enable --now bakabakaband-score-backup.timer
+[Unit]
+Description=Back up Bakabakaband score database
+
+[Service]
+Type=oneshot
+User=bbscore
+Group=bbscore
+WorkingDirectory=/srv/bakabakaband-score
+EnvironmentFile=/etc/bakabakaband-score.env
+Environment=DATA_DIR=/var/lib/bakabakaband-score
+Environment=BACKUP_KEEP=14
+ExecStart=/usr/bin/node scripts/backup.js
