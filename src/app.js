@@ -5,9 +5,9 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const { ScoreStore } = require('./store');
 const { validateSubmission, assessSubmission } = require('./validate');
+const { makeLimiter, makeCapacityGuard, makeProxyWarning, newStats } = require('./guard');
 
 /*!
  * 管理トークンを定数時間で比較する。
@@ -32,11 +32,12 @@ function parsePositiveInt(value, fallback, max) {
 /*!
  * Express アプリを組み立てる。テストから直接使えるように listen はしない。
  * @param {Object} config loadConfig() の結果
- * @returns {{ app: import('express').Express, store: ScoreStore }}
+ * @returns {{ app: import('express').Express, store: ScoreStore, stats: Object }}
  */
 function createApp(config) {
     const app = express();
     const store = new ScoreStore(config.dbPath);
+    const stats = newStats();
 
     app.disable('x-powered-by');
     if (config.trustProxy > 0) {
@@ -68,31 +69,53 @@ function createApp(config) {
         return next();
     };
 
-    const submitLimiter = config.disableRateLimit
-        ? (req, res, next) => next()
-        : rateLimit({
-            windowMs: config.submitRateWindowMs,
-            limit: config.submitRateMax,
-            standardHeaders: 'draft-7',
-            legacyHeaders: false,
-            message: { error: 'too many submissions, try again later' },
+    const submitLimiter = makeLimiter(config, {
+        windowMs: config.submitRateWindowMs,
+        limit: config.submitRateMax,
+        message: 'too many submissions, try again later',
+    });
+    const readLimiter = makeLimiter(config, {
+        windowMs: config.readRateWindowMs,
+        limit: config.readRateMax,
+        message: 'too many requests, slow down',
+    });
+    const capacityGuard = makeCapacityGuard(config, store, stats);
+
+    app.use(makeProxyWarning(config));
+    app.use((req, res, next) => {
+        res.on('finish', () => {
+            if (res.statusCode === 429) {
+                stats.rate_limited += 1;
+            }
         });
+        next();
+    });
 
     // --- 静的ページ ---------------------------------------------------------
     const publicDir = path.join(__dirname, '..', 'public');
+    app.use(readLimiter);
     app.use(express.static(publicDir, { index: 'index.html' }));
     app.get('/leaderboard', (req, res) => {
         res.sendFile(path.join(publicDir, 'leaderboard.html'));
     });
 
     // --- スコア登録 ---------------------------------------------------------
-    app.post('/submit', submitLimiter, express.json({ limit: config.bodyLimit, strict: true }), (req, res) => {
+    app.post('/submit', submitLimiter, capacityGuard, express.json({ limit: config.bodyLimit, strict: true }), (req, res) => {
         const result = validateSubmission(req.body);
         if (!result.ok) {
+            stats.rejected += 1;
             return res.status(400).json({ error: `invalid submission: ${result.error}` });
         }
         const assessment = assessSubmission(result.submission, result.legacy);
         const { id, rank, duplicate } = store.insert(result.submission, assessment);
+        if (duplicate) {
+            stats.duplicates += 1;
+        } else {
+            stats.accepted += 1;
+            if (assessment.flags.length > 0) {
+                stats.flagged += 1;
+            }
+        }
         // ゲーム側は HTTP 200 のみを成功と見なすので 201 ではなく 200 を返す。
         // 重複 (再送) も、クライアントから見れば登録済みなので 200 で既存の記録を返す
         return res.status(200).json({
@@ -148,16 +171,18 @@ function createApp(config) {
     // eslint-disable-next-line no-unused-vars
     app.use((err, req, res, next) => {
         if (err.type === 'entity.parse.failed') {
+            stats.rejected += 1;
             return res.status(400).json({ error: 'malformed JSON' });
         }
         if (err.type === 'entity.too.large') {
+            stats.rejected += 1;
             return res.status(413).json({ error: 'payload too large' });
         }
         console.error(err);
         return res.status(500).json({ error: 'internal server error' });
     });
 
-    return { app, store };
+    return { app, store, stats };
 }
 
 module.exports = { createApp, checkAdminToken };

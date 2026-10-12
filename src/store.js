@@ -48,6 +48,10 @@ const MIGRATIONS = [
     CREATE UNIQUE INDEX IF NOT EXISTS scores_submission_id_idx ON scores (submission_id) WHERE submission_id IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS scores_content_hash_idx ON scores (content_hash);
     `,
+    // 3: 日次受付上限の集計用 (#15)
+    `
+    CREATE INDEX IF NOT EXISTS scores_created_at_idx ON scores (created_at);
+    `,
 ];
 
 const SUMMARY_COLUMNS = `
@@ -96,6 +100,7 @@ class ScoreStore {
         this.listStmt = this.db.prepare(
             `SELECT ${SUMMARY_COLUMNS} FROM scores ORDER BY points DESC, created_at ASC LIMIT ? OFFSET ?`);
         this.countStmt = this.db.prepare('SELECT COUNT(*) AS n FROM scores');
+        this.countSinceStmt = this.db.prepare('SELECT COUNT(*) AS n FROM scores WHERE created_at >= ?');
         this.getStmt = this.db.prepare(`SELECT ${SUMMARY_COLUMNS}, submission FROM scores WHERE id = ?`);
         this.deleteStmt = this.db.prepare('DELETE FROM scores WHERE id = ?');
         this.verifyStmt = this.db.prepare('UPDATE scores SET verified = ? WHERE id = ?');
@@ -173,6 +178,10 @@ class ScoreStore {
 
     count() {
         return this.countStmt.get().n;
+    }
+
+    countSince(isoTimestamp) {
+        return this.countSinceStmt.get(isoTimestamp).n;
     }
 
     get(id) {

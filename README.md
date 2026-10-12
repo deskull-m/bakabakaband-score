@@ -20,14 +20,21 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 | `SCORES_DB` | `./data/scores.sqlite` | SQLite ファイル。`:memory:` でインメモリ |
 | `ADMIN_TOKEN` | (未設定) | 管理操作用 Bearer トークン。未設定なら削除などの管理操作は 503 で無効 |
 | `TRUST_PROXY` | `0` | リバースプロキシ配下で `X-Forwarded-For` を信用する段数。レート制限の IP 判定に使う |
+| `CLIENT_IP_HEADER` | (未設定) | クライアント IP を取るヘッダ (Cloudflare なら `CF-Connecting-IP`)。前段以外からの直接接続を塞いでいる場合のみ設定する |
 | `CORS_ORIGIN` | `*` | 読み取り API (`GET /scores`) に付ける CORS Origin |
 | `BODY_LIMIT` | `512kb` | `POST /submit` のボディ上限 |
 | `SUBMIT_RATE_WINDOW_MS` | `600000` | `/submit` レート制限のウィンドウ (ms) |
 | `SUBMIT_RATE_MAX` | `10` | ウィンドウ内に 1 IP が送信できる回数 |
+| `READ_RATE_WINDOW_MS` | `60000` | 読み取り API / ページのレート制限のウィンドウ (ms) |
+| `READ_RATE_MAX` | `120` | ウィンドウ内に 1 IP が読み取れる回数 |
 | `DISABLE_RATE_LIMIT` | | `1` でレート制限を無効化 (テスト用) |
+| `SUBMIT_DAILY_MAX` | `500` | 1 日 (UTC) の総受付件数。超えたら `/submit` が 503。`0` で無効 |
+| `MIN_FREE_DISK_MB` | `1024` | DB のあるディスクの空きがこれを切ったら `/submit` が 503。`0` で無効 |
+| `STATS_INTERVAL_MS` | `3600000` | 受付・拒否などの件数をログに出す間隔。`0` で無効 |
 | `MAX_PAGE_SIZE` | `200` | `GET /scores` の 1 ページ最大件数 |
 
-本番では HTTPS を終端するリバースプロキシ (Caddy, nginx など) の背後に置き、`TRUST_PROXY=1` を設定すること。
+本番では Cloudflare を前段に置き、オリジンの Caddy / nginx で TLS を終端する構成を想定している。
+手順は [deploy/cloudflare.md](deploy/cloudflare.md) を参照。`TRUST_PROXY=1` と `CLIENT_IP_HEADER=CF-Connecting-IP` を忘れると全員が同じ IP に見えてレート制限で締め出される。
 
 ## API
 
@@ -101,7 +108,10 @@ npm test
 「大量投稿や荒らしに耐える」「怪しい記録を後から見分けて消せる」ことを目標にしている。
 
 - JSON Schema による入力検証と、文字列長・数値範囲の上限
-- IP ごとのレート制限、ボディサイズ上限
+- IP ごと (IPv6 は /64 ごと) のレート制限、ボディサイズ上限
+- 日次受付上限とディスク空き容量による `/submit` の自動停止 (閲覧は維持)
+- 接続タイムアウトを短く設定し、遅い接続を大量に張られても資源を握り続けない
+- volumetric な攻撃は Cloudflare に任せる ([deploy/cloudflare.md](deploy/cloudflare.md))
 - 申告スコアを信用せず、申告された入力から同じ式で再計算して乖離を記録
 - 明らかに不可能な値は拒否せず `flags` を付けて保存し、管理者が確認・削除できる
 - 管理操作はトークン必須。未設定時は無効

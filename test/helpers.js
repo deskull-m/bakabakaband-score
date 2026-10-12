@@ -8,14 +8,17 @@ function startServer(overrides = {}) {
         SCORES_DB: ':memory:',
         DISABLE_RATE_LIMIT: '1',
         ADMIN_TOKEN: 'test-admin-token',
+        SUBMIT_DAILY_MAX: '0',
+        MIN_FREE_DISK_MB: '0',
     }, overrides));
-    const { app, store } = createApp(config);
+    const { app, store, stats } = createApp(config);
     return new Promise((resolve) => {
         const server = app.listen(0, '127.0.0.1', () => {
             const base = `http://127.0.0.1:${server.address().port}`;
             resolve({
                 base,
                 store,
+                stats,
                 close: () => new Promise((done) => server.close(() => {
                     store.close();
                     done();

@@ -16,6 +16,8 @@ function loadConfig(env = process.env) {
         adminToken: env.ADMIN_TOKEN || '',
         // リバースプロキシ配下で X-Forwarded-For を信用する段数 (0 で無効)
         trustProxy: Number(env.TRUST_PROXY) || 0,
+        // クライアント IP を取るヘッダ (例: CF-Connecting-IP)。前段以外からの直接接続を塞いでいる場合のみ設定する
+        clientIpHeader: env.CLIENT_IP_HEADER || '',
         // 読み取り API に付与する CORS の Origin。公開データなので既定は '*'
         corsOrigin: env.CORS_ORIGIN || '*',
         // 受け付ける POST ボディの上限
@@ -23,8 +25,17 @@ function loadConfig(env = process.env) {
         // /submit のレート制限 (IP ごと、ウィンドウ内の回数)
         submitRateWindowMs: Number(env.SUBMIT_RATE_WINDOW_MS) || 10 * 60 * 1000,
         submitRateMax: Number(env.SUBMIT_RATE_MAX) || 10,
+        // 読み取り API / ページのレート制限 (IP ごと、ウィンドウ内の回数)
+        readRateWindowMs: Number(env.READ_RATE_WINDOW_MS) || 60 * 1000,
+        readRateMax: Number(env.READ_RATE_MAX) || 120,
         // レート制限を無効化する (テスト用)
         disableRateLimit: env.DISABLE_RATE_LIMIT === '1',
+        // 全体での日次受付上限 (0 で無効)
+        submitDailyMax: env.SUBMIT_DAILY_MAX !== undefined ? Number(env.SUBMIT_DAILY_MAX) : 500,
+        // ディスク空き容量がこれを切ったら /submit を停止する (MB、0 で無効)
+        minFreeDiskMb: env.MIN_FREE_DISK_MB !== undefined ? Number(env.MIN_FREE_DISK_MB) : 1024,
+        // 統計ログの出力間隔 (ms、0 で無効)
+        statsIntervalMs: env.STATS_INTERVAL_MS !== undefined ? Number(env.STATS_INTERVAL_MS) : 60 * 60 * 1000,
         // 一覧 API の 1 ページ最大件数
         maxPageSize: Number(env.MAX_PAGE_SIZE) || 200,
     };
