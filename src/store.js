@@ -77,6 +77,14 @@ const MIGRATIONS = [
         detail      TEXT
     );
     `,
+    // 6: 絞り込み用インデックス (#11)
+    `
+    CREATE INDEX IF NOT EXISTS scores_race_idx ON scores (race) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS scores_class_idx ON scores (class) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS scores_winner_idx ON scores (is_winner) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS scores_version_idx ON scores (game_version) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS scores_death_cause_idx ON scores (death_cause) WHERE deleted_at IS NULL;
+    `,
 ];
 
 /*!
@@ -150,12 +158,6 @@ class ScoreStore {
             'SELECT id, points, created_at, deleted_at FROM scores WHERE (submission_id IS NOT NULL AND submission_id = ?) OR content_hash = ? LIMIT 1');
         this.rankStmt = this.db.prepare(
             `SELECT COUNT(*) + 1 AS rank FROM scores WHERE ${LIVE} AND (points > ? OR (points = ? AND created_at < ?))`);
-        this.listStmt = this.db.prepare(
-            `SELECT ${SUMMARY_COLUMNS} FROM scores WHERE ${LIVE} ORDER BY points DESC, created_at ASC LIMIT ? OFFSET ?`);
-        this.listFlaggedStmt = this.db.prepare(
-            `SELECT ${SUMMARY_COLUMNS} FROM scores WHERE ${LIVE} AND verified = 0 AND flags != '[]' ORDER BY created_at DESC LIMIT ? OFFSET ?`);
-        this.countStmt = this.db.prepare(`SELECT COUNT(*) AS n FROM scores WHERE ${LIVE}`);
-        this.countFlaggedStmt = this.db.prepare(`SELECT COUNT(*) AS n FROM scores WHERE ${LIVE} AND verified = 0 AND flags != '[]'`);
         // 日次上限は削除済みも数える (削除で枠が空かないように)
         this.countSinceStmt = this.db.prepare('SELECT COUNT(*) AS n FROM scores WHERE created_at >= ?');
         this.getStmt = this.db.prepare(`SELECT ${SUMMARY_COLUMNS}, submission FROM scores WHERE id = ?`);
@@ -250,13 +252,77 @@ class ScoreStore {
         return tx();
     }
 
-    list({ limit, offset, flagged = false }) {
-        const stmt = flagged ? this.listFlaggedStmt : this.listStmt;
-        return stmt.all(limit, offset).map(rowToSummary);
+    /*!
+     * 絞り込み条件から WHERE 句とパラメータを組み立てる。
+     * @param {Object} f  { flagged, race, class, winner, version, since, until, name }
+     */
+    static buildFilter(f = {}) {
+        const where = [LIVE];
+        const params = [];
+        if (f.flagged) {
+            where.push('verified = 0 AND flags != \'[]\'');
+        }
+        if (f.race) {
+            where.push('race = ?');
+            params.push(f.race);
+        }
+        if (f.class) {
+            where.push('class = ?');
+            params.push(f.class);
+        }
+        if (f.winner) {
+            where.push('is_winner = 1');
+        }
+        if (f.version) {
+            where.push('game_version = ?');
+            params.push(f.version);
+        }
+        if (f.since) {
+            where.push('created_at >= ?');
+            params.push(f.since);
+        }
+        if (f.until) {
+            where.push('created_at < ?');
+            params.push(f.until);
+        }
+        if (f.name) {
+            where.push('name LIKE ? ESCAPE \'\\\'');
+            params.push('%' + f.name.replace(/[\\%_]/g, (c) => '\\' + c) + '%');
+        }
+        return { where: where.join(' AND '), params };
     }
 
-    count({ flagged = false } = {}) {
-        return (flagged ? this.countFlaggedStmt : this.countStmt).get().n;
+    /*!
+     * @param {Object} opts { limit, offset, sort: 'points'|'recent', ...絞り込み }
+     */
+    list({ limit, offset, sort = 'points', ...filter }) {
+        const { where, params } = ScoreStore.buildFilter(filter);
+        const order = sort === 'recent' ? 'created_at DESC' : 'points DESC, created_at ASC';
+        return this.db.prepare(`SELECT ${SUMMARY_COLUMNS} FROM scores WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
+            .all(...params, limit, offset).map(rowToSummary);
+    }
+
+    count(filter = {}) {
+        const { where, params } = ScoreStore.buildFilter(filter);
+        return this.db.prepare(`SELECT COUNT(*) AS n FROM scores WHERE ${where}`).get(...params).n;
+    }
+
+    /*!
+     * 集計。種族・職業ごとの件数と最高記録、死因の上位、バージョン一覧。
+     */
+    stats() {
+        const best = (column) => this.db.prepare(`
+            SELECT ${column} AS key, COUNT(*) AS count, SUM(is_winner) AS winners, MAX(points) AS best_points,
+                   (SELECT id FROM scores s2 WHERE s2.${LIVE} AND s2.${column} = s1.${column} ORDER BY points DESC, created_at ASC LIMIT 1) AS best_id,
+                   (SELECT name FROM scores s2 WHERE s2.${LIVE} AND s2.${column} = s1.${column} ORDER BY points DESC, created_at ASC LIMIT 1) AS best_name
+            FROM scores s1 WHERE ${LIVE} AND ${column} IS NOT NULL GROUP BY ${column} ORDER BY count DESC, key ASC`).all();
+        const totals = this.db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(is_winner), 0) AS winners,
+            COALESCE(SUM(verified), 0) AS verified, MIN(created_at) AS first, MAX(created_at) AS last FROM scores WHERE ${LIVE}`).get();
+        const deaths = this.db.prepare(`SELECT death_cause AS cause, COUNT(*) AS count FROM scores
+            WHERE ${LIVE} AND is_winner = 0 AND death_cause IS NOT NULL GROUP BY death_cause ORDER BY count DESC, cause ASC LIMIT 20`).all();
+        const versions = this.db.prepare(`SELECT game_version AS version, COUNT(*) AS count FROM scores
+            WHERE ${LIVE} AND game_version IS NOT NULL GROUP BY game_version ORDER BY count DESC, version ASC`).all();
+        return { totals, by_race: best('race'), by_class: best('class'), by_death_cause: deaths, by_version: versions };
     }
 
     countSince(isoTimestamp) {

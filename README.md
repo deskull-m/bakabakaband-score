@@ -73,7 +73,26 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 
 ### `GET /scores?limit=&offset=`
 
-ランキングを JSON で返す (`{ total, limit, offset, scores: [...] }`)。添付データは含まない。
+ランキングを JSON で返す (`{ total, limit, offset, sort, filter, scores: [...] }`)。添付データは含まない。
+
+絞り込みと並び順のクエリ:
+
+| クエリ | 意味 |
+|---|---|
+| `race=`, `class=` | 種族・職業の完全一致 |
+| `winner=1` | 勝者のみ |
+| `version=` | ゲームバージョンの完全一致 |
+| `name=` | 名前の部分一致 |
+| `since=`, `until=` | 登録日時の範囲 (ISO 8601、`until` は未満) |
+| `flagged=1` | フラグ付きで未検証の記録のみ |
+| `sort=points` (既定) / `sort=recent` | スコア順 / 登録日時の新しい順 |
+
+不正な値は無視される。実際に効いた条件は応答の `filter` に入る。
+
+### `GET /stats`
+
+集計。全体の件数・勝者数・検証済み数、種族別と職業別の件数・勝者数・最高記録、死因の上位 20、バージョン別件数。
+60 秒のキャッシュを許可している。
 
 ### `GET /scores/:id`
 
@@ -87,7 +106,9 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 
 ### `GET /leaderboard`
 
-ランキングの HTML ページ。サーバは HTML を文字列連結せず、ブラウザ側で DOM API のみで描画する。
+ランキングの HTML ページ。ランキング / 最近の記録 / 集計のタブと、種族・職業・バージョン・名前・期間・勝者の絞り込みがある。
+表示状態は URL のクエリに反映されるので、絞り込んだ状態をそのまま共有できる。
+サーバは HTML を文字列連結せず、ブラウザ側で DOM API のみで描画する。
 スクリーンショット (HTML) はスクリプト実行不可の sandbox iframe に閉じ込めて表示する。
 
 ### `GET /scores?flagged=1`

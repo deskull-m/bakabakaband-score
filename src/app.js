@@ -21,6 +21,33 @@ function checkAdminToken(header, expected) {
     return given.length === want.length && crypto.timingSafeEqual(given, want);
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+/*!
+ * クエリ文字列から絞り込み条件を取り出す。不正な値は無視する。
+ */
+function parseFilter(q) {
+    const str = (v, max = 64) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : undefined);
+    const date = (v) => {
+        if (!ISO_DATE.test(v || '')) {
+            return undefined;
+        }
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+    };
+    return {
+        flagged: q.flagged === '1',
+        race: str(q.race),
+        class: str(q.class),
+        winner: q.winner === '1',
+        version: str(q.version, 128),
+        since: date(q.since),
+        until: date(q.until),
+        name: str(q.name),
+        sort: q.sort === 'recent' ? 'recent' : 'points',
+    };
+}
+
 function parsePositiveInt(value, fallback, max) {
     const n = Number.parseInt(value, 10);
     if (!Number.isFinite(n) || n < 0) {
@@ -152,13 +179,20 @@ function createApp(config) {
     app.get('/scores', readCors, (req, res) => {
         const limit = parsePositiveInt(req.query.limit, 100, config.maxPageSize) || config.maxPageSize;
         const offset = parsePositiveInt(req.query.offset, 0, Number.MAX_SAFE_INTEGER);
-        const flagged = req.query.flagged === '1';
+        const { sort, ...filter } = parseFilter(req.query);
         res.json({
-            total: store.count({ flagged }),
+            total: store.count(filter),
             limit,
             offset,
-            scores: store.list({ limit, offset, flagged }),
+            sort,
+            filter: Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined && v !== false)),
+            scores: store.list(Object.assign({ limit, offset, sort }, filter)),
         });
+    });
+
+    app.get('/stats', readCors, (req, res) => {
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json(store.stats());
     });
 
     app.get('/scores/:id', readCors, (req, res) => {

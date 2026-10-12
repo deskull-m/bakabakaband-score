@@ -11,6 +11,89 @@
     const subtitle = document.getElementById('subtitle');
     const hideFlagged = document.getElementById('hide-flagged');
     const dialog = document.getElementById('detail');
+    const filters = document.getElementById('filters');
+    const pager = document.getElementById('pager');
+    const statsSection = document.getElementById('stats');
+    const PAGE_SIZE = 100;
+
+    // 表示状態は URL のクエリに持ち、共有できるようにする
+    function readState() {
+        const q = new URLSearchParams(location.search);
+        return {
+            sort: ['points', 'recent', 'stats'].indexOf(q.get('sort')) >= 0 ? q.get('sort') : 'points',
+            page: Math.max(0, parseInt(q.get('page') || '0', 10) || 0),
+            race: q.get('race') || '',
+            class: q.get('class') || '',
+            version: q.get('version') || '',
+            name: q.get('name') || '',
+            since: q.get('since') || '',
+            until: q.get('until') || '',
+            winner: q.get('winner') === '1',
+            hideFlagged: q.get('hide_flagged') === '1',
+        };
+    }
+
+    function writeState(state) {
+        const q = new URLSearchParams();
+        if (state.sort !== 'points') { q.set('sort', state.sort); }
+        if (state.page > 0) { q.set('page', String(state.page)); }
+        ['race', 'class', 'version', 'name', 'since', 'until'].forEach(function (k) {
+            if (state[k]) { q.set(k, state[k]); }
+        });
+        if (state.winner) { q.set('winner', '1'); }
+        if (state.hideFlagged) { q.set('hide_flagged', '1'); }
+        const qs = q.toString();
+        history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+    }
+
+    function stateFromForm(prev) {
+        return {
+            sort: prev.sort === 'stats' ? 'points' : prev.sort,
+            page: 0,
+            race: filters.race.value,
+            class: filters.class.value,
+            version: filters.version.value,
+            name: filters.name.value.trim(),
+            since: filters.since.value,
+            until: filters.until.value,
+            winner: filters.winner.checked,
+            hideFlagged: hideFlagged.checked,
+        };
+    }
+
+    function formFromState(state) {
+        filters.race.value = state.race;
+        filters.class.value = state.class;
+        filters.version.value = state.version;
+        filters.name.value = state.name;
+        filters.since.value = state.since;
+        filters.until.value = state.until;
+        filters.winner.checked = state.winner;
+        hideFlagged.checked = state.hideFlagged;
+        document.querySelectorAll('.tab').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.sort === state.sort);
+        });
+    }
+
+    function queryFromState(state) {
+        const q = new URLSearchParams();
+        q.set('limit', String(PAGE_SIZE));
+        q.set('offset', String(state.page * PAGE_SIZE));
+        q.set('sort', state.sort);
+        ['race', 'class', 'version', 'name', 'since'].forEach(function (k) {
+            if (state[k]) { q.set(k, state[k]); }
+        });
+        if (state.until) {
+            // 日付指定は「その日の終わりまで」
+            const d = new Date(state.until + 'T00:00:00Z');
+            d.setUTCDate(d.getUTCDate() + 1);
+            q.set('until', d.toISOString());
+        }
+        if (state.winner) { q.set('winner', '1'); }
+        return q.toString();
+    }
+
+    let state = readState();
 
     function el(tag, text, className) {
         const node = document.createElement(tag);
@@ -35,8 +118,9 @@
     function renderRow(score, index) {
         const tr = document.createElement('tr');
         tr.dataset.id = score.id;
-        const rankClass = index < 3 ? 'rank-' + (index + 1) : '';
-        tr.appendChild(el('td', index + 1, rankClass));
+        const rank = state.page * PAGE_SIZE + index + 1;
+        const rankClass = state.sort === 'points' && rank <= 3 ? 'rank-' + rank : '';
+        tr.appendChild(el('td', state.sort === 'points' ? rank : '', rankClass));
 
         const nameCell = el('td');
         nameCell.appendChild(el('strong', score.name));
@@ -67,11 +151,21 @@
     }
 
     async function load() {
+        formFromState(state);
+        writeState(state);
+        if (state.sort === 'stats') {
+            table.hidden = true;
+            empty.hidden = true;
+            pager.hidden = true;
+            statsSection.hidden = false;
+            return loadStats();
+        }
+        statsSection.hidden = true;
         subtitle.textContent = '読み込み中...';
-        const res = await fetch('/scores?limit=200');
+        const res = await fetch('/scores?' + queryFromState(state));
         const data = await res.json();
         let scores = data.scores;
-        if (hideFlagged.checked) {
+        if (state.hideFlagged) {
             scores = scores.filter(function (s) {
                 return s.verified || s.flags.length === 0;
             });
@@ -82,7 +176,69 @@
         });
         table.hidden = scores.length === 0;
         empty.hidden = scores.length !== 0;
-        subtitle.textContent = '登録数: ' + data.total + ' 件';
+        const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+        pager.hidden = pages <= 1;
+        document.getElementById('page-info').textContent = (state.page + 1) + ' / ' + pages;
+        document.getElementById('prev').disabled = state.page <= 0;
+        document.getElementById('next').disabled = state.page >= pages - 1;
+        subtitle.textContent = '該当 ' + data.total + ' 件';
+        return undefined;
+    }
+
+    function fillSelect(select, rows, keyName, label) {
+        const current = select.value;
+        select.replaceChildren(el('option', label + ': すべて'));
+        select.firstChild.value = '';
+        rows.forEach(function (r) {
+            const o = el('option', r[keyName] + ' (' + r.count + ')');
+            o.value = r[keyName];
+            select.appendChild(o);
+        });
+        select.value = current;
+    }
+
+    let statsLoaded = null;
+    async function fetchStats() {
+        if (!statsLoaded) {
+            statsLoaded = fetch('/stats').then(function (r) { return r.json(); });
+        }
+        return statsLoaded;
+    }
+
+    async function loadFilterOptions() {
+        const st = await fetchStats();
+        fillSelect(filters.race, st.by_race, 'key', '種族');
+        fillSelect(filters.class, st.by_class, 'key', '職業');
+        fillSelect(filters.version, st.by_version, 'version', 'バージョン');
+        formFromState(state);
+    }
+
+    function fillTable(id, rows, cells) {
+        const body = document.querySelector('#' + id + ' tbody');
+        body.replaceChildren();
+        rows.forEach(function (r) {
+            const tr = document.createElement('tr');
+            cells(r).forEach(function (c) { tr.appendChild(el('td', c)); });
+            body.appendChild(tr);
+        });
+    }
+
+    async function loadStats() {
+        subtitle.textContent = '集計';
+        const st = await fetchStats();
+        const dl = document.getElementById('stats-totals');
+        dl.replaceChildren();
+        addItem(dl, '登録数', st.totals.total);
+        addItem(dl, '勝者', st.totals.winners);
+        addItem(dl, '検証済', st.totals.verified);
+        addItem(dl, '最初の記録', st.totals.first ? formatDate(st.totals.first) : null);
+        addItem(dl, '最新の記録', st.totals.last ? formatDate(st.totals.last) : null);
+        const bestCells = function (r) {
+            return [r.key, r.count, r.winners, r.best_points.toLocaleString(), r.best_name];
+        };
+        fillTable('stats-race', st.by_race, bestCells);
+        fillTable('stats-class', st.by_class, bestCells);
+        fillTable('stats-death', st.by_death_cause, function (r) { return [r.cause, r.count]; });
     }
 
     function addItem(dl, label, value) {
@@ -185,14 +341,46 @@
     document.getElementById('detail-close').addEventListener('click', function () {
         dialog.close();
     });
-    document.getElementById('refresh').addEventListener('click', load);
-    hideFlagged.addEventListener('change', load);
+    function reload() {
+        load().catch(function (err) {
+            subtitle.textContent = '読み込みに失敗しました: ' + err.message;
+        });
+    }
 
-    load().catch(function (err) {
-        subtitle.textContent = '読み込みに失敗しました: ' + err.message;
+    filters.addEventListener('submit', function (e) {
+        e.preventDefault();
+        state = stateFromForm(state);
+        reload();
     });
+    hideFlagged.addEventListener('change', function () {
+        state = stateFromForm(state);
+        reload();
+    });
+    document.getElementById('clear').addEventListener('click', function () {
+        state = { sort: state.sort === 'stats' ? 'points' : state.sort, page: 0, race: '', class: '', version: '', name: '', since: '', until: '', winner: false, hideFlagged: false };
+        reload();
+    });
+    document.querySelectorAll('.tab').forEach(function (b) {
+        b.addEventListener('click', function () {
+            state.sort = b.dataset.sort;
+            state.page = 0;
+            reload();
+        });
+    });
+    document.getElementById('prev').addEventListener('click', function () {
+        state.page = Math.max(0, state.page - 1);
+        reload();
+    });
+    document.getElementById('next').addEventListener('click', function () {
+        state.page += 1;
+        reload();
+    });
+
+    loadFilterOptions().catch(function () {});
+    reload();
     setInterval(function () {
-        if (!dialog.open) {
+        if (!dialog.open && state.sort !== 'stats') {
+            statsLoaded = null;
             load().catch(function () {});
         }
     }, 60000);

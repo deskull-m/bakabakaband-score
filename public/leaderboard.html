@@ -12,9 +12,22 @@
         <div class="subtitle" id="subtitle">読み込み中...</div>
         <p class="subtitle">送信された記録は公開されます。<a href="/#privacy">掲載される情報と削除依頼について</a></p>
         <div class="controls">
-            <button id="refresh" type="button">更新</button>
-            <label><input type="checkbox" id="hide-flagged"> 要確認の記録を隠す</label>
+            <button type="button" class="tab" data-sort="points">ランキング</button>
+            <button type="button" class="tab" data-sort="recent">最近の記録</button>
+            <button type="button" class="tab" data-sort="stats">集計</button>
         </div>
+        <form id="filters" class="controls filters">
+            <select name="race" id="f-race"><option value="">種族: すべて</option></select>
+            <select name="class" id="f-class"><option value="">職業: すべて</option></select>
+            <select name="version" id="f-version"><option value="">バージョン: すべて</option></select>
+            <input type="search" name="name" id="f-name" placeholder="名前" maxlength="64">
+            <input type="date" name="since" id="f-since" title="この日以降">
+            <input type="date" name="until" id="f-until" title="この日まで">
+            <label><input type="checkbox" name="winner" id="f-winner" value="1"> 勝者のみ</label>
+            <label><input type="checkbox" id="hide-flagged"> 要確認を隠す</label>
+            <button type="submit">絞り込む</button>
+            <button type="button" id="clear">解除</button>
+        </form>
         <div class="table-wrap">
             <table id="scores" hidden>
                 <thead>
@@ -26,7 +39,22 @@
                 <tbody></tbody>
             </table>
         </div>
-        <div class="no-scores" id="empty" hidden>まだ記録がありません。</div>
+        <div class="no-scores" id="empty" hidden>該当する記録がありません。</div>
+        <div class="controls" id="pager" hidden>
+            <button type="button" id="prev">前へ</button>
+            <span id="page-info"></span>
+            <button type="button" id="next">次へ</button>
+        </div>
+        <section id="stats" hidden>
+            <h2>集計</h2>
+            <dl class="grid" id="stats-totals"></dl>
+            <h3>種族別</h3>
+            <div class="table-wrap"><table class="stats-table" id="stats-race"><thead><tr><th>種族</th><th>件数</th><th>勝者</th><th>最高記録</th><th>名前</th></tr></thead><tbody></tbody></table></div>
+            <h3>職業別</h3>
+            <div class="table-wrap"><table class="stats-table" id="stats-class"><thead><tr><th>職業</th><th>件数</th><th>勝者</th><th>最高記録</th><th>名前</th></tr></thead><tbody></tbody></table></div>
+            <h3>死因</h3>
+            <div class="table-wrap"><table class="stats-table" id="stats-death"><thead><tr><th>死因</th><th>件数</th></tr></thead><tbody></tbody></table></div>
+        </section>
     </div>
 
     <dialog id="detail">
