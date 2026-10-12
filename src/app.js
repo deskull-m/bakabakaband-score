@@ -92,12 +92,14 @@ function createApp(config) {
             return res.status(400).json({ error: `invalid submission: ${result.error}` });
         }
         const assessment = assessSubmission(result.submission, result.legacy);
-        const { id, rank } = store.insert(result.submission, assessment);
-        // ゲーム側は HTTP 200 のみを成功と見なすので 201 ではなく 200 を返す
+        const { id, rank, duplicate } = store.insert(result.submission, assessment);
+        // ゲーム側は HTTP 200 のみを成功と見なすので 201 ではなく 200 を返す。
+        // 重複 (再送) も、クライアントから見れば登録済みなので 200 で既存の記録を返す
         return res.status(200).json({
             success: true,
             id,
             rank,
+            duplicate,
             points: assessment.pointsComputed !== null ? assessment.pointsComputed : result.submission.score.points,
             flags: assessment.flags,
         });

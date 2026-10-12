@@ -52,7 +52,11 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 }
 ```
 
-応答は HTTP 200 で `{ success, id, rank, points, flags }`。ゲーム側は 200 のみを成功として扱う。
+応答は HTTP 200 で `{ success, id, rank, points, flags, duplicate }`。ゲーム側は 200 のみを成功として扱う。
+
+- `submission_id` (UUID、任意) を送ると、同じ値での再送は登録せず既存の記録を `duplicate: true` で返す。
+  クライアントは送信内容を組み立てた時点で生成し、再送時も同じ値を使うこと。
+- `submission_id` が無くても、添付を除いた内容が完全に一致する送信は同一と見なす。
 
 - `points` はサーバが `calc_score()` と同じ式で再計算した値。再計算に必要な項目 (`score.options`, `progress.max_max_experience`) が無い場合は申告値を使う。
 - `flags` は妥当性チェックの結果。拒否はせず、怪しい記録に印を付けて保存する
