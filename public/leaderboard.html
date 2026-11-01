@@ -70,10 +70,15 @@
         </div>
         <section data-panel="status"><dl class="grid" id="detail-status"></dl></section>
         <section data-panel="dump" hidden><pre id="detail-dump"></pre></section>
-        <section data-panel="screen" hidden><iframe id="detail-screen" class="dump-frame" sandbox="" title="screen dump"></iframe></section>
+        <section data-panel="screen" hidden>
+            <p class="subtitle"><a id="detail-screen-link" href="#" target="_blank" rel="noopener">別ウィンドウで開く</a></p>
+            <div id="detail-screen-viewer"></div>
+            <iframe id="detail-screen" class="dump-frame" sandbox="" title="screen dump" hidden></iframe>
+        </section>
         <section data-panel="json" hidden><pre id="detail-json"></pre></section>
     </dialog>
 
+    <script src="/screen.js"></script>
     <script src="/leaderboard.js"></script>
 </body>
 </html>

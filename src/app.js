@@ -146,6 +146,9 @@ function createApp(config) {
     app.get('/leaderboard', (req, res) => {
         res.sendFile(path.join(publicDir, 'leaderboard.html'));
     });
+    app.get('/screen', (req, res) => {
+        res.sendFile(path.join(publicDir, 'screen.html'));
+    });
 
     // --- スコア登録 ---------------------------------------------------------
     app.post('/submit', submitLimiter, capacityGuard, express.json({ limit: config.bodyLimit, strict: true }), (req, res) => {
@@ -212,9 +215,9 @@ function createApp(config) {
         if (!attachment) {
             return res.status(404).json({ error: 'attachment not found' });
         }
-        res.type('text/plain; charset=utf-8');
+        res.type(`${attachment.mediaType}; charset=utf-8`);
         res.set('Content-Security-Policy', 'sandbox');
-        res.set('Content-Disposition', `inline; filename="${req.params.kind}.txt"`);
+        res.set('Content-Disposition', `inline; filename="${req.params.kind}.${attachment.mediaType === 'application/json' ? 'json' : 'txt'}"`);
         return res.send(attachment.body);
     });
 

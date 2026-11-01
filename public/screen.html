@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bakabakaband Screen</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1 id="title">スクリーンショット</h1>
+        <div class="subtitle" id="subtitle">読み込み中...</div>
+        <p class="subtitle"><a href="/leaderboard">ランキングへ戻る</a></p>
+        <div id="viewer"></div>
+        <section id="legacy" hidden>
+            <p class="subtitle">この記録は旧形式の HTML スクリーンショットのみで、変換できませんでした。</p>
+            <iframe id="legacy-frame" class="dump-frame" sandbox="" title="screen dump"></iframe>
+        </section>
+    </div>
+    <script src="/screen.js"></script>
+    <script src="/screen-page.js"></script>
+</body>
+</html>

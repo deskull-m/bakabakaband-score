@@ -53,9 +53,12 @@ test('fixture: round-trips through the server with attachments', async () => {
         assert.equal(entry.name, 'ガラドリエル');
         assert.equal(entry.game_version, '馬鹿馬鹿蛮怒 0.0.2.0(開発版)');
         assert.equal(entry.submission_id, sub.submission_id);
-        assert.ok(entry.attachments.screen_dump.size > 0);
-        const screen = await (await fetch(`${srv.base}/scores/${body.id}/attachments/screen_dump`)).text();
-        assert.match(screen, /<pre>/);
+        assert.ok(entry.attachments.screen.size > 0);
+        const res = await fetch(`${srv.base}/scores/${body.id}/attachments/screen`);
+        assert.match(res.headers.get('content-type'), /^application\/json/);
+        const screen = await res.json();
+        assert.equal(screen.format, 'bakabakaband-screen');
+        assert.equal(screen.rows[2][2][1], '@');
     } finally {
         await srv.close();
     }

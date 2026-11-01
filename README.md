@@ -133,8 +133,41 @@ Node.js 20 以上が必要。データは既定で `./data/scores.sqlite` に保
 
 ### `GET /scores/:id/attachments/:kind`
 
-添付 (`character_dump` または `screen_dump`) の本文。常に `text/plain` と `Content-Security-Policy: sandbox` で返すので、
-スクリーンショット (HTML) を直リンクで開いても文書として解釈されない。ランキングページは取得した本文を sandbox iframe に流し込んで表示する。
+添付の本文。`Content-Security-Policy: sandbox` を付けて返す。
+
+| kind | 内容 | Content-Type |
+|---|---|---|
+| `character_dump` | キャラクターダンプのテキスト | `text/plain` |
+| `screen` | 画面の JSON (下記) | `application/json` |
+| `screen_dump` | 旧形式のスクリーンショット HTML。新しいクライアントは送らない | `text/plain` |
+
+### `GET /screen?id=`
+
+1 件のスクリーンショットだけを表示するページ。ランキングの詳細からも開ける。
+
+### 画面の JSON (`bakabakaband-screen`)
+
+ゲームは画面を HTML ではなく、行ごとに「色番号と文字列」の連続区間 (run) で表した JSON として送る。
+描画はブラウザ側の `public/screen.js` (`window.BakaScreen`) が行い、文字サイズ・配色 (オリジナル / 高コントラスト / モノクロ / グリーン)・
+背景色の切替、`@` の強調、テキストのコピー、PNG 保存ができる。文字列は `textContent` と `fillText` でしか扱わないので、
+画面に何が書かれていても HTML としては解釈されない。
+
+```jsonc
+{
+  "format": "bakabakaband-screen", "version": 1,
+  "width": 80, "height": 24,
+  "palette": ["#000000", "#ffffff", "#808080", ...],   // 色番号 0-15 の RGB (ゲームの angband_color_table)
+  "rows": [
+    [[1, "ガラドリエル"], [11, " Lv 32"]],             // [色番号, 文字列] の run。行末の空白は省略される
+    [[1, "#"], [9, "."], [1, "@"], [12, "D"]],
+    []                                                 // 空行
+  ]
+}
+```
+
+旧形式の `screen_dump` (HTML) を受け取った場合は、サーバが `<font color>` の区間を解析して同じ JSON を派生させて保存する
+(`converted_from: "html"`)。変換できない HTML は sandbox iframe で表示する。
+ゲーム側の生成は本体リポジトリの `src/io/report.cpp` の `make_screen_dump()`。
 
 ### `GET /leaderboard`
 

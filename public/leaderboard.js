@@ -256,6 +256,30 @@
         return res.ok ? res.text() : null;
     }
 
+    function showScreen() {
+        const viewer = document.getElementById('detail-screen-viewer');
+        const frame = document.getElementById('detail-screen');
+        if (pendingAttachments && pendingAttachments.kinds.screen) {
+            // JSON の画面データをブラウザ側で描画する
+            fetchAttachment('screen').then(function (text) {
+                if (text !== null) {
+                    viewer.hidden = false;
+                    frame.hidden = true;
+                    window.BakaScreen.createViewer(viewer, JSON.parse(text), { filename: (pendingAttachments.name || 'screen') + '.png' });
+                }
+            });
+        } else if (pendingAttachments && pendingAttachments.kinds.screen_dump) {
+            // 旧形式の HTML しか無い記録は、スクリプト実行不可の sandbox iframe に閉じ込める
+            fetchAttachment('screen_dump').then(function (text) {
+                if (text !== null) {
+                    viewer.hidden = true;
+                    frame.hidden = false;
+                    frame.srcdoc = text;
+                }
+            });
+        }
+    }
+
     function showTab(name) {
         dialog.querySelectorAll('[data-panel]').forEach(function (panel) {
             panel.hidden = panel.dataset.panel !== name;
@@ -267,12 +291,7 @@
                 }
             });
         } else if (name === 'screen') {
-            // スクリーンショットは HTML なので、スクリプト実行不可の sandbox iframe に閉じ込める
-            fetchAttachment('screen_dump').then(function (text) {
-                if (text !== null) {
-                    document.getElementById('detail-screen').srcdoc = text;
-                }
-            });
+            showScreen();
         }
     }
 
@@ -320,9 +339,13 @@
 
         // 添付は大きいので、タブを開いたときに個別に取得する
         const attachments = entry.attachments || {};
-        pendingAttachments = { id: id, kinds: attachments };
+        pendingAttachments = { id: id, kinds: attachments, name: entry.name };
         document.getElementById('detail-dump').textContent = attachments.character_dump ? '(読み込み中...)' : '(添付なし)';
-        document.getElementById('detail-screen').srcdoc = attachments.screen_dump ? '<p>(読み込み中...)</p>' : '<p>(添付なし)</p>';
+        const viewer = document.getElementById('detail-screen-viewer');
+        viewer.hidden = false;
+        viewer.replaceChildren(el('p', attachments.screen || attachments.screen_dump ? '(読み込み中...)' : '(添付なし)', 'subtitle'));
+        document.getElementById('detail-screen').hidden = true;
+        document.getElementById('detail-screen-link').href = '/screen?id=' + encodeURIComponent(id);
         document.getElementById('detail-json').textContent = JSON.stringify(sub, null, 2);
 
         showTab('status');

@@ -113,3 +113,17 @@ pre {
 .tab.active { background: var(--accent); color: #000; }
 #stats h2, #stats h3 { color: var(--accent); }
 .stats-table td, .stats-table th { white-space: normal; }
+
+.baka-screen {
+    margin: 0;
+    padding: 8px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    font-family: "Courier New", "MS Gothic", "Osaka-Mono", monospace;
+    white-space: pre;
+}
+.baka-screen-has-player { text-shadow: 0 0 6px currentColor; }
+.baka-screen-controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 8px 0; }
+.baka-screen-controls select, .baka-screen-controls input[type="range"] { vertical-align: middle; }
+.baka-screen-controls select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 3px 6px; }
+.baka-screen-info { color: var(--muted); font-size: 0.85em; }

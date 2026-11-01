@@ -154,9 +154,13 @@
           "type": "string",
           "maxLength": 262144
         },
+        "screen": {
+          "$ref": "#/definitions/screen"
+        },
         "screen_dump": {
           "type": "string",
-          "maxLength": 262144
+          "maxLength": 262144,
+          "description": "旧形式のスクリーンショット HTML。新しいクライアントは screen を送る"
         }
       },
       "additionalProperties": false
@@ -379,6 +383,72 @@
           "maxItems": 8,
           "items": {
             "$ref": "#/definitions/text"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "screen": {
+      "type": "object",
+      "description": "画面の内容。行ごとに [色番号, 文字列] の連続区間 (run) で表す。描画は閲覧側で行う",
+      "required": [
+        "format",
+        "version",
+        "width",
+        "height",
+        "palette",
+        "rows"
+      ],
+      "properties": {
+        "format": {
+          "const": "bakabakaband-screen"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "palette": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "array",
+            "maxItems": 1024,
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                }
+              ]
+            }
           }
         }
       },

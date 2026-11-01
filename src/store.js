@@ -7,8 +7,38 @@ const zlib = require('zlib');
 const Database = require('better-sqlite3');
 const { contentHash } = require('./canonical');
 const { suspicionOf } = require('./plausibility');
+const { htmlToScreen } = require('./screen');
 
-const ATTACHMENT_KINDS = ['character_dump', 'screen_dump'];
+// screen は JSON 文字列、それ以外はテキスト
+const ATTACHMENT_KINDS = ['character_dump', 'screen', 'screen_dump'];
+const ATTACHMENT_MEDIA_TYPES = { character_dump: 'text/plain', screen: 'application/json', screen_dump: 'text/plain' };
+
+/*!
+ * 送信された添付を保存用の文字列に正規化する。
+ * screen (JSON) が無く旧形式の screen_dump (HTML) だけがある場合は変換して screen も作る。
+ */
+function normalizeAttachments(attachments) {
+    const out = {};
+    if (!attachments) {
+        return out;
+    }
+    if (typeof attachments.character_dump === 'string' && attachments.character_dump.length > 0) {
+        out.character_dump = attachments.character_dump;
+    }
+    if (attachments.screen && typeof attachments.screen === 'object') {
+        out.screen = JSON.stringify(attachments.screen);
+    }
+    if (typeof attachments.screen_dump === 'string' && attachments.screen_dump.length > 0) {
+        out.screen_dump = attachments.screen_dump;
+        if (!out.screen) {
+            const converted = htmlToScreen(attachments.screen_dump);
+            if (converted) {
+                out.screen = JSON.stringify(converted);
+            }
+        }
+    }
+    return out;
+}
 
 /*!
  * スキーマのマイグレーション。PRAGMA user_version を適用済みの番号として使う。
@@ -90,12 +120,28 @@ const MIGRATIONS = [
     `
     ALTER TABLE scores ADD COLUMN suspicion INTEGER NOT NULL DEFAULT 0;
     `,
+    // 8: 旧形式の HTML スクリーンショットから JSON 画面を作る (スキーマ変更なし)
+    `
+    SELECT 1;
+    `,
 ];
 
 /*!
  * スキーマ変更に伴うデータ移行。キーはマイグレーション番号 (適用後の user_version)。
  */
 const DATA_MIGRATIONS = {
+    8(db) {
+        const insert = db.prepare('INSERT OR IGNORE INTO attachments (score_id, kind, size, body_gz) VALUES (?, ?, ?, ?)');
+        const rows = db.prepare(`SELECT score_id, body_gz FROM attachments a WHERE kind = 'screen_dump'
+            AND NOT EXISTS (SELECT 1 FROM attachments b WHERE b.score_id = a.score_id AND b.kind = 'screen')`).all();
+        for (const row of rows) {
+            const converted = htmlToScreen(zlib.gunzipSync(row.body_gz).toString('utf8'));
+            if (converted) {
+                const body = JSON.stringify(converted);
+                insert.run(row.score_id, 'screen', Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
+            }
+        }
+    },
     // 既存の flags から suspicion を計算する
     7(db) {
         const update = db.prepare('UPDATE scores SET suspicion = ? WHERE id = ?');
@@ -113,10 +159,8 @@ const DATA_MIGRATIONS = {
             if (!submission.attachments) {
                 continue;
             }
-            for (const [kind, body] of Object.entries(submission.attachments)) {
-                if (typeof body === 'string' && body.length > 0) {
-                    insert.run(row.id, kind, Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
-                }
+            for (const [kind, body] of Object.entries(normalizeAttachments(submission.attachments))) {
+                insert.run(row.id, kind, Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
             }
             delete submission.attachments;
             update.run(JSON.stringify(submission), row.id);
@@ -265,11 +309,8 @@ class ScoreStore {
                 return { id: existing.id, rank, duplicate: true };
             }
             this.insertStmt.run(row);
-            for (const kind of ATTACHMENT_KINDS) {
-                const body = attachments && attachments[kind];
-                if (typeof body === 'string' && body.length > 0) {
-                    this.insertAttachmentStmt.run(row.id, kind, Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
-                }
+            for (const [kind, body] of Object.entries(normalizeAttachments(attachments))) {
+                this.insertAttachmentStmt.run(row.id, kind, Buffer.byteLength(body, 'utf8'), zlib.gzipSync(body));
             }
             const rank = this.rankStmt.get(points, points, row.created_at).rank;
             return { id: row.id, rank, duplicate: false };
@@ -386,7 +427,7 @@ class ScoreStore {
         if (!row) {
             return null;
         }
-        return { size: row.size, body: zlib.gunzipSync(row.body_gz).toString('utf8') };
+        return { size: row.size, body: zlib.gunzipSync(row.body_gz).toString('utf8'), mediaType: ATTACHMENT_MEDIA_TYPES[kind] };
     }
 
     /*!
@@ -440,4 +481,4 @@ class ScoreStore {
     }
 }
 
-module.exports = { ScoreStore, MIGRATIONS, ATTACHMENT_KINDS };
+module.exports = { ScoreStore, MIGRATIONS, ATTACHMENT_KINDS, normalizeAttachments };

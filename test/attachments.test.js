@@ -16,10 +16,10 @@ test('attachments: stored separately, listed with size, served as text/plain wit
 
         const entry = await (await fetch(`${srv.base}/scores/${body.id}`)).json();
         assert.equal(entry.submission.attachments, undefined);
-        assert.deepEqual(entry.attachments, {
-            character_dump: { size: Buffer.byteLength('dump あいう') },
-            screen_dump: { size: SCREEN.length },
-        });
+        // 旧形式の screen_dump からは JSON の screen も派生する
+        assert.deepEqual(Object.keys(entry.attachments).sort(), ['character_dump', 'screen', 'screen_dump']);
+        assert.equal(entry.attachments.character_dump.size, Buffer.byteLength('dump あいう'));
+        assert.equal(entry.attachments.screen_dump.size, SCREEN.length);
 
         const dump = await fetch(`${srv.base}/scores/${body.id}/attachments/character_dump`);
         assert.equal(dump.status, 200);
